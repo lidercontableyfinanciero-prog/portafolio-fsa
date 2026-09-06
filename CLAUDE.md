@@ -27,7 +27,7 @@ SPA de gestión y análisis del portafolio de inversiones internacionales de la
 
 ```bash
 # backend
-cd backend && .venv/Scripts/python.exe -m pytest -q          # 37 pruebas (unit + API + ETL)
+cd backend && .venv/Scripts/python.exe -m pytest -q          # 41 pruebas (unit + API + ETL + export)
 cd backend && .venv/Scripts/python.exe scripts/smoke_pipeline.py   # E2E sin Postgres (SQLite)
 cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload
 

@@ -27,6 +27,7 @@ services:
       SECRET_KEY: change-me-in-production-with-a-32-byte-random-string
       BACKEND_CORS_ORIGINS: '["http://localhost:3000"]'
       SEED_DATA_DIR: /app/seed_data
+      RUN_SEED: "1"           # siembra al primer arranque (usa ./Referencias)
     ports:
       - "8000:8000"
     volumes:

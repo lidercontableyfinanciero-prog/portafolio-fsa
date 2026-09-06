@@ -62,3 +62,36 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* --- Impresión / "Guardar como PDF" desde el navegador --- */
+@media print {
+  aside,
+  header.sticky,
+  .print\:hidden {
+    display: none !important;
+  }
+  .lg\:pl-sidebar {
+    padding-left: 0 !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  main .mx-auto {
+    max-width: 100% !important;
+  }
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .shadow-card {
+    box-shadow: none !important;
+    border: 1px solid var(--fsa-border) !important;
+  }
+  section,
+  .rounded-lg {
+    break-inside: avoid;
+  }
+  body {
+    background: #fff !important;
+  }
+}

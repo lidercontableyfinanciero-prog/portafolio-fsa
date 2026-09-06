@@ -6,6 +6,7 @@ from app.api.routes import (
     auth,
     data_admin,
     etl,
+    export,
     fx,
     parameters,
     portfolio,
@@ -24,3 +25,4 @@ api_router.include_router(fx.router)
 api_router.include_router(parameters.router)
 api_router.include_router(etl.router)
 api_router.include_router(data_admin.router)
+api_router.include_router(export.router)

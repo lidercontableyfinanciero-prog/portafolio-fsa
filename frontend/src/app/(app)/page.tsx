@@ -12,6 +12,7 @@ import {
 import { BreakdownTable } from "@/components/dashboard/BreakdownTable";
 import { KpiRow } from "@/components/dashboard/KpiRow";
 import { RiskPanels } from "@/components/dashboard/RiskPanels";
+import { ExportMenu } from "@/components/ui/ExportMenu";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
 import { fetcher } from "@/lib/api";
 import { FSA } from "@/lib/colors";
@@ -64,6 +65,18 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 print:hidden">
+        <p className="text-sm text-fsa-muted">
+          {data.period.month} {data.period.year}
+          {["type", "classification", "sector", "rating_grade"].some(
+            (k) => data.applied_filters[k],
+          )
+            ? " · vista filtrada"
+            : ""}
+        </p>
+        <ExportMenu base="/export/dashboard" query={query} allowPrint />
+      </div>
+
       <KpiRow k={data.kpis} />
 
       <section className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">

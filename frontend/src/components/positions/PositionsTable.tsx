@@ -12,6 +12,7 @@ import useSWR from "swr";
 
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
+import { ExportMenu } from "@/components/ui/ExportMenu";
 import { EmptyState, ErrorState, Spinner } from "@/components/ui/States";
 import { fetcher } from "@/lib/api";
 import { gradeColor, stopLossColor } from "@/lib/colors";
@@ -148,15 +149,18 @@ export function PositionsTable() {
             </span>
           ) : null}
         </h3>
-        <input
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          placeholder="Buscar descripción o CUSIP…"
-          className="min-h-[38px] w-64 rounded border border-fsa-border px-3 text-sm focus:border-fsa-blue"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Buscar descripción o CUSIP…"
+            className="min-h-[38px] w-64 rounded border border-fsa-border px-3 text-sm focus:border-fsa-blue"
+          />
+          <ExportMenu base="/export/positions" query={query} />
+        </div>
       </div>
 
       {error ? (

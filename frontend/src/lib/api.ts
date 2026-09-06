@@ -74,3 +74,33 @@ export const api = {
 };
 
 export const fetcher = <T,>(path: string) => api.get<T>(path);
+
+/** Descarga autenticada: pide el archivo con el bearer token y dispara el guardado. */
+export async function downloadFile(path: string, fallbackName = "descarga") {
+  const headers = new Headers();
+  const token = tokenStore.get();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const res = await fetch(`${BASE}${path}`, { headers });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const b = await res.json();
+      detail = typeof b.detail === "string" ? b.detail : detail;
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(res.status, detail);
+  }
+  const cd = res.headers.get("content-disposition") ?? "";
+  const match = /filename="?([^"]+)"?/.exec(cd);
+  const name = match ? match[1] : fallbackName;
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

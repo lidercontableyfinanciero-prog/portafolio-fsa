@@ -2,10 +2,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+
+
+def _normalize_db_url(url: str) -> str:
+    """Muchos PaaS (Render, Railway, Heroku) entregan `postgres://` o
+    `postgresql://`. SQLAlchemy + psycopg v3 necesita `postgresql+psycopg://`."""
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://") :]
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://") :]
+    return url
 
 
 class Settings(BaseSettings):
@@ -22,6 +32,11 @@ class Settings(BaseSettings):
 
     # --- DB ---
     database_url: str = "postgresql+psycopg://fsa:fsa@localhost:5432/portafolio_fsa"
+
+    @field_validator("database_url", mode="after")
+    @classmethod
+    def _fix_db_url(cls, v: str) -> str:
+        return _normalize_db_url(v)
 
     # --- Auth --- (>=32 bytes; sobreescribir en producción)
     secret_key: str = "dev-only-secret-change-me-please-0123456789abcdef"

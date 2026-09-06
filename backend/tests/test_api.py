@@ -197,6 +197,58 @@ def test_twr_endpoint(client, admin_token):
     assert round(ago["portfolio_return"], 4) == 0.0146   # Dietz agosto ~ 1,46 %
 
 
+def test_dashboard_risk_alerts(client, lector_token):
+    d = client.get(
+        "/api/portfolio/dashboard?year=2026&month=Agosto", headers=auth(lector_token)
+    ).json()
+    for panel in ("alerta_tiempo", "alerta_emisor", "limite_cash", "stop_loss"):
+        assert panel in d and isinstance(d[panel], list)
+    ra = d["risk_alerts"]
+    assert ra["vencimientos_1a_posiciones"] >= 0
+    assert ra["plazo_prom_vencimiento_bonos"] > 0        # hay bonos
+    # coherencia: la suma de posiciones de stop_loss = N° de posiciones
+    assert sum(r["posiciones"] for r in d["stop_loss"]) == d["kpis"]["n_posiciones"]
+
+
+# --------------------------------------------------------------------------- #
+# Exportación (Excel / PDF)
+# --------------------------------------------------------------------------- #
+_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def test_exports_for_both_roles(client, admin_token, lector_token):
+    cases = [
+        ("/api/export/positions.xlsx", _XLSX, b"PK"),           # zip -> "PK"
+        ("/api/export/dashboard.xlsx", _XLSX, b"PK"),
+        ("/api/export/positions.pdf", "application/pdf", b"%PDF"),
+        ("/api/export/dashboard.pdf", "application/pdf", b"%PDF"),
+    ]
+    for token in (admin_token, lector_token):
+        for path, ctype, magic in cases:
+            r = client.get(f"{path}?year=2026&month=Agosto", headers=auth(token))
+            assert r.status_code == 200, f"{path}: {r.text[:200]}"
+            assert r.headers["content-type"].startswith(ctype)
+            assert "attachment" in r.headers.get("content-disposition", "")
+            assert r.content[:4].startswith(magic)
+            assert len(r.content) > 800
+
+
+def test_export_respects_filters(client, admin_token):
+    full = client.get("/api/export/positions.pdf?year=2026&month=Agosto",
+                      headers=auth(admin_token))
+    filt = client.get(
+        "/api/export/positions.pdf?year=2026&month=Agosto&type=Bond",
+        headers=auth(admin_token),
+    )
+    assert full.status_code == filt.status_code == 200
+    # el PDF filtrado (menos filas) debe pesar menos
+    assert len(filt.content) < len(full.content)
+
+
+def test_export_requires_auth(client):
+    assert client.get("/api/export/dashboard.xlsx").status_code == 401
+
+
 # --------------------------------------------------------------------------- #
 # ZZ: mutan datos (nuevos meses) — deben ir al final para no afectar a los
 # tests que consultan "el período más reciente".

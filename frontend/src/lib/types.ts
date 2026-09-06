@@ -47,6 +47,15 @@ export interface BreakdownRow {
   posiciones: number;
 }
 
+export interface RiskAlerts {
+  vencimientos_1a_posiciones: number;
+  vencimientos_1a_valor: number;
+  plazo_prom_vencimiento_bonos: number;
+  emisores_sobre_limite: number;
+  valor_emisores_sobre_limite: number;
+  posiciones_stop_loss_venta: number;
+}
+
 export interface DashboardPayload {
   kpis: Kpis;
   por_clasificacion: BreakdownRow[];
@@ -56,6 +65,9 @@ export interface DashboardPayload {
   calidad_sp: BreakdownRow[];
   stop_loss: BreakdownRow[];
   alerta_tiempo: BreakdownRow[];
+  alerta_emisor: BreakdownRow[];
+  limite_cash: BreakdownRow[];
+  risk_alerts: RiskAlerts;
   period: { year: number; month: string };
   applied_filters: Record<string, string | null>;
 }

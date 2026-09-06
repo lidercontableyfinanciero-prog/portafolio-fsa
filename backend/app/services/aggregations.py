@@ -36,6 +36,17 @@ class BreakdownRow:
 
 
 @dataclass(slots=True)
+class RiskAlerts:
+    """Panel de riesgo y alertas (hoja DASHBOARD)."""
+    vencimientos_1a_posiciones: int = 0
+    vencimientos_1a_valor: float = 0.0
+    plazo_prom_vencimiento_bonos: float = 0.0
+    emisores_sobre_limite: int = 0          # cost basis > 500.000 USD
+    valor_emisores_sobre_limite: float = 0.0
+    posiciones_stop_loss_venta: int = 0     # "Evaluar Venta" + "Ejecutar Venta"
+
+
+@dataclass(slots=True)
 class DashboardPayload:
     kpis: PortfolioKpis
     por_clasificacion: list[BreakdownRow] = field(default_factory=list)
@@ -45,6 +56,9 @@ class DashboardPayload:
     calidad_sp: list[BreakdownRow] = field(default_factory=list)
     stop_loss: list[BreakdownRow] = field(default_factory=list)
     alerta_tiempo: list[BreakdownRow] = field(default_factory=list)
+    alerta_emisor: list[BreakdownRow] = field(default_factory=list)
+    limite_cash: list[BreakdownRow] = field(default_factory=list)
+    risk_alerts: RiskAlerts = field(default_factory=RiskAlerts)
 
 
 # --------------------------------------------------------------------------- #
@@ -123,6 +137,27 @@ def _breakdown(
     return sorted(rows.values(), key=lambda r: r.valor_mercado, reverse=True)
 
 
+def _risk_alerts(positions: list[PositionMetrics]) -> RiskAlerts:
+    ra = RiskAlerts()
+    bond_terms: list[float] = []
+    for p in positions:
+        t = p.term_to_maturity_years
+        if t is not None and 0 < t < 1:
+            ra.vencimientos_1a_posiciones += 1
+            ra.vencimientos_1a_valor += p.market_value
+        if (p.type or "").lower() == "bond" and t is not None:
+            bond_terms.append(t)
+        if p.issuer_alert == "Revisar":
+            ra.emisores_sobre_limite += 1
+            ra.valor_emisores_sobre_limite += p.market_value
+        if p.stop_loss in ("Evaluar Venta", "Ejecutar Venta - Previa Revisión"):
+            ra.posiciones_stop_loss_venta += 1
+    ra.plazo_prom_vencimiento_bonos = (
+        sum(bond_terms) / len(bond_terms) if bond_terms else 0.0
+    )
+    return ra
+
+
 def build_dashboard(positions: list[PositionMetrics]) -> DashboardPayload:
     kpis = compute_kpis(positions)
     tmv = kpis.valor_mercado
@@ -140,7 +175,19 @@ def build_dashboard(positions: list[PositionMetrics]) -> DashboardPayload:
             fill_labels=["Grado de Inversión", "Grado Especulativo"],
         ),
         stop_loss=_breakdown(positions, lambda p: p.stop_loss, total_market_value=tmv),
-        alerta_tiempo=_breakdown(positions, lambda p: p.time_alert, total_market_value=tmv),
+        alerta_tiempo=_breakdown(
+            positions, lambda p: p.time_alert, total_market_value=tmv,
+            fill_labels=["OK", "Revisar"],
+        ),
+        alerta_emisor=_breakdown(
+            positions, lambda p: p.issuer_alert, total_market_value=tmv,
+            fill_labels=["OK", "Revisar"],
+        ),
+        limite_cash=_breakdown(
+            positions, lambda p: p.cash_limit_alert, total_market_value=tmv,
+            fill_labels=["OK", "Revision"],
+        ),
+        risk_alerts=_risk_alerts(positions),
     )
 
 
@@ -154,4 +201,7 @@ def payload_to_dict(payload: DashboardPayload) -> dict:
         "calidad_sp": [asdict(r) for r in payload.calidad_sp],
         "stop_loss": [asdict(r) for r in payload.stop_loss],
         "alerta_tiempo": [asdict(r) for r in payload.alerta_tiempo],
+        "alerta_emisor": [asdict(r) for r in payload.alerta_emisor],
+        "limite_cash": [asdict(r) for r in payload.limite_cash],
+        "risk_alerts": asdict(payload.risk_alerts),
     }
