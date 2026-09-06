@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / Next
+node_modules/
+.next/
+out/
+dist/
+npm-debug.log*
+
+# Env
+.env
+.env.local
+*.local
+
+# SQLite (solo se usa en pruebas locales)
+*.db
+
+# Datos fuente (confidenciales)
+Referencias/
+seed_data/
+
+# OS / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# TS incremental
+tsconfig.tsbuildinfo
