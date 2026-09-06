@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.benchmark import Benchmark
@@ -242,6 +242,52 @@ def upsert_parsed_rows(db: Session, rows: list[ParsedRow]) -> dict:
         "snapshots_inserted": inserted,
         "snapshots_updated": updated,
     }
+
+
+def periods_with_data(
+    db: Session, periods: list[tuple[int, str]]
+) -> dict[tuple[int, str], int]:
+    """De los `periods` (año, mes) dados, cuáles ya tienen snapshots y con cuántas filas."""
+    if not periods:
+        return {}
+    clauses = [
+        (PositionSnapshot.statement_year == y)
+        & (func.lower(PositionSnapshot.statement_month) == m.lower())
+        for y, m in periods
+    ]
+    rows = db.execute(
+        select(
+            PositionSnapshot.statement_year,
+            PositionSnapshot.statement_month,
+            func.count(PositionSnapshot.id),
+        )
+        .where(or_(*clauses))
+        .group_by(PositionSnapshot.statement_year, PositionSnapshot.statement_month)
+    ).all()
+    # normaliza la clave al par (año, mes) tal cual viene en `periods`
+    canon = {(y, m.lower()): (y, m) for y, m in periods}
+    out: dict[tuple[int, str], int] = {}
+    for y, m, cnt in rows:
+        out[canon.get((y, m.lower()), (y, m))] = cnt
+    return out
+
+
+def delete_snapshots_for_periods(db: Session, periods: list[tuple[int, str]]) -> int:
+    """Borra todos los snapshots de los períodos dados (para recarga 'replace')."""
+    if not periods:
+        return 0
+    clauses = [
+        (PositionSnapshot.statement_year == y)
+        & (func.lower(PositionSnapshot.statement_month) == m.lower())
+        for y, m in periods
+    ]
+    res = db.execute(
+        delete(PositionSnapshot).where(or_(*clauses)).execution_options(
+            synchronize_session=False
+        )
+    )
+    db.flush()
+    return res.rowcount or 0
 
 
 def recompute_monthly_returns(db: Session) -> int:

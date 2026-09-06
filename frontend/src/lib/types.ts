@@ -147,6 +147,61 @@ export interface FxResult {
   control_check: number;
 }
 
+export type IngestionStatus =
+  | "success"
+  | "partial"
+  | "conflict"
+  | "error"
+  | "dry_run";
+
+export interface IngestionLogRow {
+  id: number;
+  uploaded_at: string;
+  filename: string;
+  uploaded_by: string | null;
+  status: IngestionStatus;
+  dry_run: boolean;
+  replace_mode: boolean;
+  total_rows: number;
+  valid_rows: number;
+  error_count: number;
+  instruments_upserted: number;
+  snapshots_inserted: number;
+  snapshots_updated: number;
+  snapshots_deleted: number;
+  periods: string[];
+  message: string | null;
+  content_sha256: string | null;
+}
+
+export interface IngestionHistory {
+  total: number;
+  limit: number;
+  offset: number;
+  items: IngestionLogRow[];
+}
+
+export interface UploadSummary {
+  filename: string;
+  content_sha256: string;
+  total_rows: number;
+  valid_rows: number;
+  error_count: number;
+  errors: { row: number | null; error: string; identifier?: string }[];
+  detected_columns: Record<string, string>;
+  ignored_columns: string[];
+  periods: string[];
+  existing_periods: { year: number; month: string; rows: number }[];
+  identical_file_loaded_at: string | null;
+  dry_run: boolean;
+  replace: boolean;
+  status?: string;
+  instruments?: number;
+  snapshots_inserted?: number;
+  snapshots_updated?: number;
+  snapshots_deleted?: number;
+}
+
 export interface TwrRow {
   year: number;
   month: number;

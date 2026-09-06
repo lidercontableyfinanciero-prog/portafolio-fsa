@@ -105,4 +105,26 @@ benchmarks(id PK, period_year, period_month, composite_rate, institutional_rate)
 monthly_returns(id PK, period_year, period_month, dietz_return, benchmark_return,
                 created_at)
 fx_scenarios(id PK, name, trm_purchase, trm_sale, trm_close, ...)  -- simulador
+
+ingestion_logs(id PK, created_at (= fecha de subida), filename, content_sha256,
+               uploaded_by_id FK -> users.id (SET NULL), uploaded_by_email,
+               status ∈ {success, partial, conflict, error, dry_run},
+               dry_run, replace_mode,
+               total_rows, valid_rows, error_count,
+               instruments_upserted, snapshots_inserted, snapshots_updated,
+               snapshots_deleted, periods (JSON: ["2026-Agosto", ...]), message)
 ```
+
+## Histórico de cargas y regla anti-duplicado
+
+Cada `POST /api/etl/upload` (solo `admin`) deja una fila en `ingestion_logs`
+—incluida la previsualización (`dry_run`) y los rechazos—. `GET /api/etl/history`
+(solo `admin`) lo expone: fecha, archivo, usuario, estado, filas y períodos.
+
+**Regla:** antes de escribir, el ETL calcula los períodos `(año, mes)` del archivo
+y consulta cuáles ya tienen snapshots.
+- Si alguno ya existe y **no** se envía `?replace=true` → **HTTP 409**, no se
+  escribe nada y se registra `status = conflict`.
+- Con `?replace=true` → se **borran** los snapshots de esos meses y se insertan
+  los del archivo (`snapshots_deleted` queda registrado). Nunca se duplican filas.
+- El `content_sha256` permite detectar la resubida del mismo archivo idéntico.

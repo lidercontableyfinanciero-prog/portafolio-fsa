@@ -51,6 +51,41 @@ def test_etl_upload_dry_run_admin(client, admin_token):
     assert body["valid_rows"] == 1
     assert "Unnamed: 9" in body["ignored_columns"]
     assert body["dry_run"] is True
+    assert body["periods"] == ["2026-Septiembre"]
+    assert body["existing_periods"] == []
+
+
+def _csv(month: str, year: int = 2026, ident: str = "TESTX", mv: int = 1200) -> str:
+    return (
+        "Statement Year,Statement Month,Classification,Type,Description,Sector,"
+        "Total Cost Basis,Estimated Market Value,Identifier\n"
+        f"{year},{month},Renta Variable,Equity,PRUEBA SA,TECNOLOGIA,1000,{mv},{ident}\n"
+    )
+
+
+def test_etl_history_records_seed_and_uploads(client, admin_token, lector_token):
+    # el seed deja un registro "Carga inicial"
+    h = client.get("/api/etl/history", headers=auth(admin_token)).json()
+    assert h["total"] >= 1
+    assert any(x["uploaded_by"] == "seed" and x["status"] in ("success", "partial")
+               for x in h["items"])
+    # lector no puede ver el histórico
+    assert client.get("/api/etl/history", headers=auth(lector_token)).status_code == 403
+
+
+def test_etl_duplicate_month_is_rejected(client, admin_token):
+    r = client.post(
+        "/api/etl/upload",
+        headers=auth(admin_token),
+        files={"file": ("agosto.csv", _csv("Agosto"), "text/csv")},
+    )
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert "ya fue cargado" in detail["message"]
+    assert any(p["month"] == "Agosto" and p["year"] == 2026 for p in detail["existing_periods"])
+    # queda registrado como conflicto en el histórico
+    h = client.get("/api/etl/history", headers=auth(admin_token)).json()
+    assert h["items"][0]["status"] == "conflict"
 
 
 # --------------------------------------------------------------------------- #
@@ -160,3 +195,54 @@ def test_twr_endpoint(client, admin_token):
     ago = body["rows"][-1]
     assert ago["month_name"] == "Agosto"
     assert round(ago["portfolio_return"], 4) == 0.0146   # Dietz agosto ~ 1,46 %
+
+
+# --------------------------------------------------------------------------- #
+# ZZ: mutan datos (nuevos meses) — deben ir al final para no afectar a los
+# tests que consultan "el período más reciente".
+# --------------------------------------------------------------------------- #
+def test_zz_new_month_then_replace(client, admin_token):
+    # 1) mes nuevo -> se carga
+    r1 = client.post(
+        "/api/etl/upload",
+        headers=auth(admin_token),
+        files={"file": ("marzo2027.csv", _csv("Marzo", 2027, "NEWMAR", 1500), "text/csv")},
+    )
+    assert r1.status_code == 200
+    assert r1.json()["status"] == "success"
+    assert r1.json()["snapshots_inserted"] == 1
+
+    # 2) mismo mes sin replace -> 409
+    r2 = client.post(
+        "/api/etl/upload",
+        headers=auth(admin_token),
+        files={"file": ("marzo2027.csv", _csv("Marzo", 2027, "NEWMAR", 1500), "text/csv")},
+    )
+    assert r2.status_code == 409
+
+    # 3) mismo mes con replace -> reemplaza (borra el anterior, inserta de nuevo)
+    r3 = client.post(
+        "/api/etl/upload?replace=true",
+        headers=auth(admin_token),
+        files={"file": ("marzo2027b.csv", _csv("Marzo", 2027, "NEWMAR2", 1600), "text/csv")},
+    )
+    assert r3.status_code == 200
+    body = r3.json()
+    assert body["snapshots_deleted"] == 1
+    assert body["snapshots_inserted"] == 1
+    assert body["status"] == "success"
+
+    # el período Marzo 2027 tiene exactamente 1 registro (no se duplicó)
+    pos = client.get(
+        "/api/positions",
+        params={"year": 2027, "month": "Marzo", "page_size": 10},
+        headers=auth(admin_token),
+    ).json()
+    assert pos["total"] == 1
+    assert pos["items"][0]["identifier"] == "NEWMAR2"
+
+    # el histórico refleja las 3 operaciones (2 success + 1 conflict) sobre marzo2027
+    h = client.get("/api/etl/history", headers=auth(admin_token)).json()
+    mar = [x for x in h["items"] if "2027-Marzo" in x["periods"]]
+    assert {x["status"] for x in mar} == {"success", "conflict"}
+    assert any(x["snapshots_deleted"] == 1 for x in mar)

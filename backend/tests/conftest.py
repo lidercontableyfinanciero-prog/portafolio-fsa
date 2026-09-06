@@ -22,9 +22,12 @@ def _engine():
 
 @pytest.fixture(scope="session")
 def seeded_db(_engine):
+    import hashlib
+
     from app.core.database import Base
     from app.core.security import hash_password
     from app.db.rating_scale_data import PARAMETERS, RATING_SCALE
+    from app.models.ingestion_log import IngestionLog, IngestionStatus
     from app.models.parameter import Parameter, RatingScale
     from app.models.user import User, UserRole
     from app.services import portfolio_repo as repo
@@ -45,9 +48,24 @@ def seeded_db(_engine):
                     full_name="Lector", role=UserRole.lector, is_active=True))
         db.add_all(Parameter(**p) for p in PARAMETERS)
         db.add_all(RatingScale(**r) for r in RATING_SCALE)
-        parsed = parse_upload(xlsx.read_bytes(), xlsx.name)
-        repo.upsert_parsed_rows(db, parsed.rows)
+        raw = xlsx.read_bytes()
+        parsed = parse_upload(raw, xlsx.name)
+        counts = repo.upsert_parsed_rows(db, parsed.rows)
         repo.recompute_monthly_returns(db)
+        db.add(
+            IngestionLog(
+                filename=xlsx.name,
+                content_sha256=hashlib.sha256(raw).hexdigest(),
+                uploaded_by_email="seed",
+                status=IngestionStatus.success,
+                total_rows=parsed.total_rows,
+                valid_rows=parsed.ok_rows,
+                instruments_upserted=counts["instruments"],
+                snapshots_inserted=counts["snapshots_inserted"],
+                periods=parsed.period_labels,
+                message="Carga inicial (seed).",
+            )
+        )
         db.commit()
     return Session
 

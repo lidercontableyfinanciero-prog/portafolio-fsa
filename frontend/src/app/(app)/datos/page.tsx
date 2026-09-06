@@ -1,5 +1,6 @@
 "use client";
 
+import { UploadHistory } from "@/components/datos/UploadHistory";
 import { UploadPanel } from "@/components/datos/UploadPanel";
 import { RoleGate } from "@/components/layout/RoleGate";
 import { PositionsTable } from "@/components/positions/PositionsTable";
@@ -14,6 +15,7 @@ export default function DatosPage() {
         }
       >
         <UploadPanel />
+        <UploadHistory />
       </RoleGate>
 
       <PositionsTable />

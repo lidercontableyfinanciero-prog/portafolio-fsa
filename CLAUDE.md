@@ -27,7 +27,7 @@ SPA de gestión y análisis del portafolio de inversiones internacionales de la
 
 ```bash
 # backend
-cd backend && .venv/Scripts/python.exe -m pytest -q          # 34 pruebas (unit + API)
+cd backend && .venv/Scripts/python.exe -m pytest -q          # 37 pruebas (unit + API + ETL)
 cd backend && .venv/Scripts/python.exe scripts/smoke_pipeline.py   # E2E sin Postgres (SQLite)
 cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload
 
@@ -41,9 +41,14 @@ docker compose --profile full up --build
 
 ## Notas
 
-- Migración inicial (`alembic/versions/0001_initial_schema.py`) usa `metadata.create_all`
-  (proyecto greenfield: los modelos son la fuente del esquema). Migraciones siguientes:
-  `alembic revision --autogenerate`.
+- **PostgreSQL local**: servicio `postgresql-16` (Windows), superusuario `postgres`/`postgres`,
+  rol de app `fsa`/`fsa`, base `portafolio_fsa`. `backend/.env` → `DATABASE_URL` ya apunta ahí.
+  Binarios en `C:\Program Files\PostgreSQL\16\bin`.
+- Migración `0001` usa `metadata.create_all` (greenfield). `0002_ingestion_logs` añade el
+  histórico con `Table.create(checkfirst=True)` → idempotente sobre bases ya materializadas.
+  Migraciones nuevas: `alembic revision --autogenerate`.
+- **ETL / anti-duplicado**: `/api/etl/upload` rechaza (409) un mes ya cargado salvo
+  `?replace=true` (que borra e reinserta). Todo queda en `ingestion_logs` / `GET /api/etl/history`.
 - Benchmarks: el seed carga 6,793 % / 8,2 % anual por defecto; editables vía
   `PUT /api/data/benchmarks` (solo admin) → recalcula Dietz/TWR.
 - Sin Python en el equipo original: se instaló 3.12 en `~/AppData/Local/Programs/Python/Python312`.

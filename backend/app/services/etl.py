@@ -197,6 +197,19 @@ class EtlResult:
     def ok_rows(self) -> int:
         return len(self.rows)
 
+    @property
+    def periods(self) -> list[tuple[int, str]]:
+        """Períodos (año, mes) presentes en las filas válidas, ordenados."""
+        seen = {
+            (int(r.snapshot["statement_year"]), str(r.snapshot["statement_month"]))
+            for r in self.rows
+        }
+        return sorted(seen, key=lambda p: (p[0], month_name_to_index(p[1])))
+
+    @property
+    def period_labels(self) -> list[str]:
+        return [f"{y}-{m}" for y, m in self.periods]
+
 
 # Nombres de hoja de datos aceptados, en orden de preferencia. NO se usa "Hoja2"
 # (es la fuente interna de las tablas dinámicas, con columnas y filas basura).

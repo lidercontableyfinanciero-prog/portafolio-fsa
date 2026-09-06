@@ -70,8 +70,29 @@ def _seed_data_from_excel(db) -> None:
         print("  datos: ya existen snapshots — se omite la recarga.")
         return
 
-    parsed = parse_upload(path.read_bytes(), path.name)
+    import hashlib
+
+    from app.models.ingestion_log import IngestionLog, IngestionStatus
+
+    raw = path.read_bytes()
+    parsed = parse_upload(raw, path.name)
     counts = repo.upsert_parsed_rows(db, parsed.rows)
+    db.add(
+        IngestionLog(
+            filename=path.name,
+            content_sha256=hashlib.sha256(raw).hexdigest(),
+            uploaded_by_email="seed",
+            status=IngestionStatus.partial if parsed.errors else IngestionStatus.success,
+            total_rows=parsed.total_rows,
+            valid_rows=parsed.ok_rows,
+            error_count=len(parsed.errors),
+            instruments_upserted=counts["instruments"],
+            snapshots_inserted=counts["snapshots_inserted"],
+            snapshots_updated=counts["snapshots_updated"],
+            periods=parsed.period_labels,
+            message="Carga inicial (seed).",
+        )
+    )
     db.commit()
     print(
         f"  datos: {parsed.ok_rows} filas OK / {len(parsed.errors)} errores · "

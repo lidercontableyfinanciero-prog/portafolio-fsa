@@ -50,7 +50,7 @@ python -m venv .venv
 .venv\Scripts\activate            # Windows PowerShell: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 copy .env.example .env             # ajustar si hace falta
-pytest                            # 34 pruebas (motor financiero + API) vs. el Excel
+pytest                            # 37 pruebas (motor + API + ETL) vs. el Excel
 alembic upgrade head              # crea el esquema
 python -m app.db.seed             # carga usuarios + datos de los Excel de Referencias/
 uvicorn app.main:app --reload     # http://localhost:8000  (docs: /docs)

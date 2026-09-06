@@ -36,7 +36,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     let detail = res.statusText;
     try {
       const body = await res.json();
-      detail = body.detail || detail;
+      const d = body.detail;
+      if (typeof d === "string") detail = d;
+      else if (d && typeof d === "object" && typeof d.message === "string")
+        detail = d.message;
     } catch {
       /* ignore */
     }

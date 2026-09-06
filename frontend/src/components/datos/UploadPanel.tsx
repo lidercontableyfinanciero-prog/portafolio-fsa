@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, FileSpreadsheet, UploadCloud } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, UploadCloud } from "lucide-react";
 import { useRef, useState } from "react";
 import { useSWRConfig } from "swr";
 
@@ -8,29 +8,26 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/States";
 import { api } from "@/lib/api";
-
-interface UploadSummary {
-  filename: string;
-  total_rows: number;
-  valid_rows: number;
-  error_count: number;
-  errors: { row: number | null; error: string; identifier?: string }[];
-  detected_columns: Record<string, string>;
-  ignored_columns: string[];
-  dry_run: boolean;
-  instruments?: number;
-  snapshots_inserted?: number;
-  snapshots_updated?: number;
-}
+import type { UploadSummary } from "@/lib/types";
 
 export function UploadPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { mutate } = useSWRConfig();
   const [file, setFile] = useState<File | null>(null);
   const [summary, setSummary] = useState<UploadSummary | null>(null);
+  const [replace, setReplace] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [committed, setCommitted] = useState(false);
+
+  function reset() {
+    setSummary(null);
+    setCommitted(false);
+    setReplace(false);
+    setError(null);
+  }
+
+  const conflict = (summary?.existing_periods?.length ?? 0) > 0;
 
   async function send(dryRun: boolean) {
     if (!file) return;
@@ -39,20 +36,21 @@ export function UploadPanel() {
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await api.upload<UploadSummary>(
-        `/etl/upload?dry_run=${dryRun}`,
-        form,
-      );
+      const qs = `dry_run=${dryRun}&replace=${dryRun ? false : replace}`;
+      const res = await api.upload<UploadSummary>(`/etl/upload?${qs}`, form);
       setSummary(res);
       if (!dryRun) {
         setCommitted(true);
-        // Revalida todas las vistas dependientes
         mutate((k) => typeof k === "string" && k.startsWith("/portfolio"));
         mutate((k) => typeof k === "string" && k.startsWith("/positions"));
         mutate((k) => typeof k === "string" && k.startsWith("/returns"));
+        mutate((k) => typeof k === "string" && k.startsWith("/etl/history"));
+      } else {
+        mutate((k) => typeof k === "string" && k.startsWith("/etl/history"));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al subir el archivo");
+      mutate((k) => typeof k === "string" && k.startsWith("/etl/history"));
     } finally {
       setBusy(false);
     }
@@ -64,8 +62,9 @@ export function UploadPanel() {
         Cargar extracto (CSV / Excel)
       </h3>
       <p className="mb-4 text-xs text-fsa-muted">
-        El ETL ignora columnas vacías y <code>Unnamed:*</code>, normaliza fechas y
-        montos, y hace <em>upsert</em> por (Año, Mes, Identificador).
+        El ETL ignora columnas vacías y <code>Unnamed:*</code>, normaliza fechas y montos,
+        y hace <em>upsert</em> por (Año, Mes, Identificador, Fecha de compra). Un mes ya
+        cargado se rechaza salvo que marques «reemplazar».
       </p>
 
       <div
@@ -76,8 +75,7 @@ export function UploadPanel() {
           const f = e.dataTransfer.files?.[0];
           if (f) {
             setFile(f);
-            setSummary(null);
-            setCommitted(false);
+            reset();
           }
         }}
       >
@@ -104,11 +102,40 @@ export function UploadPanel() {
           className="hidden"
           onChange={(e) => {
             setFile(e.target.files?.[0] ?? null);
-            setSummary(null);
-            setCommitted(false);
+            reset();
           }}
         />
       </div>
+
+      {summary && conflict && !committed ? (
+        <div className="mt-4 rounded border border-fsa-amber/40 bg-fsa-amber/10 p-3 text-sm">
+          <p className="inline-flex items-center gap-1.5 font-600 text-fsa-amber">
+            <AlertTriangle className="h-4 w-4" aria-hidden />
+            Estos meses ya están cargados
+          </p>
+          <ul className="mt-1 text-fsa-text">
+            {summary.existing_periods.map((p) => (
+              <li key={`${p.year}-${p.month}`}>
+                {p.month} {p.year} — {p.rows} registros
+              </li>
+            ))}
+          </ul>
+          <label className="mt-2 flex items-center gap-2 font-600 text-fsa-navy">
+            <input
+              type="checkbox"
+              checked={replace}
+              onChange={(e) => setReplace(e.target.checked)}
+            />
+            Reemplazar los datos de esos meses
+          </label>
+          {summary.identical_file_loaded_at ? (
+            <p className="mt-1 text-xs text-fsa-muted">
+              Nota: este archivo idéntico ya se cargó el{" "}
+              {new Date(summary.identical_file_loaded_at).toLocaleString("es-CO")}.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-4 flex gap-2">
         <Button variant="outline" disabled={!file || busy} onClick={() => send(true)}>
@@ -116,14 +143,18 @@ export function UploadPanel() {
         </Button>
         <Button
           variant="cta"
-          disabled={!file || busy || !summary || committed}
+          disabled={!file || busy || !summary || committed || (conflict && !replace)}
           onClick={() => send(false)}
         >
-          Confirmar carga
+          {conflict ? "Reemplazar y cargar" : "Confirmar carga"}
         </Button>
       </div>
 
-      {error ? <div className="mt-3"><ErrorState message={error} /></div> : null}
+      {error ? (
+        <div className="mt-3">
+          <ErrorState message={error} />
+        </div>
+      ) : null}
 
       {summary ? (
         <div className="mt-4 space-y-3 rounded border border-fsa-border bg-white p-3 text-sm">
@@ -131,12 +162,17 @@ export function UploadPanel() {
             <p className="inline-flex items-center gap-1.5 font-600 text-fsa-green">
               <CheckCircle2 className="h-4 w-4" aria-hidden />
               Carga aplicada: {summary.snapshots_inserted} nuevos ·{" "}
-              {summary.snapshots_updated} actualizados · {summary.instruments} instrumentos
+              {summary.snapshots_updated} actualizados
+              {summary.snapshots_deleted
+                ? ` · ${summary.snapshots_deleted} reemplazados`
+                : ""}{" "}
+              · {summary.instruments} instrumentos
             </p>
           ) : (
             <p className="font-600 text-fsa-navy">
               Previsualización — {summary.valid_rows} filas válidas de {summary.total_rows}
-              {summary.error_count ? ` · ${summary.error_count} con error` : ""}
+              {summary.error_count ? ` · ${summary.error_count} con error` : ""} · períodos:{" "}
+              {summary.periods.join(", ") || "—"}
             </p>
           )}
 
