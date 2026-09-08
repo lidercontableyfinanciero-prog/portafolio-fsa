@@ -28,12 +28,17 @@ def test_kpis():
     assert k.n_posiciones == 3
 
 
-def test_filter_by_rating_grade_sp():
+def test_filter_by_rating_grade_independent():
     # A = BBB -> Grado de Inversión ; B = BB y C (Cash, sin rating) -> Grado Especulativo
-    inv = filter_positions(_sample(), rating_grade="Grado de Inversión", rating_agency="sp")
+    inv = filter_positions(_sample(), sp_grade="Grado de Inversión")
     assert {p.identifier for p in inv} == {"A"}
-    spec = filter_positions(_sample(), rating_grade="Grado Especulativo", rating_agency="sp")
+    spec = filter_positions(_sample(), sp_grade="Grado Especulativo")
     assert {p.identifier for p in spec} == {"B", "C"}
+    # Moody's y S&P se pueden combinar (independientes y simultáneos)
+    both = filter_positions(
+        _sample(), moodys_grade="Grado Especulativo", sp_grade="Grado de Inversión"
+    )
+    assert {p.identifier for p in both} == {"A"}
 
 
 def test_dashboard_breakdowns():

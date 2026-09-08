@@ -27,7 +27,7 @@ export function Select({
   );
   return (
     <label className={cn("flex flex-col gap-1", className)}>
-      <span className="text-[11px] font-600 uppercase tracking-wide text-fsa-muted">
+      <span className="text-xs font-500 text-fsa-muted">
         {label}
       </span>
       <select

@@ -66,6 +66,22 @@ def latest_period(db: Session) -> Period | None:
     return periods[-1] if periods else None
 
 
+def previous_period(db: Session, year: int, month: str) -> Period | None:
+    periods = list_periods(db)
+    mi = month_name_to_index(month)
+    prev = [p for p in periods if (p.year, p.month_index) < (year, mi)]
+    return prev[-1] if prev else None
+
+
+def param_value(db: Session, key: str, default: float) -> float:
+    from app.models.parameter import Parameter
+
+    p = db.get(Parameter, key)
+    if p is None or p.value_numeric is None:
+        return default
+    return float(p.value_numeric)
+
+
 def _rows_for_period(db: Session, year: int, month: str):
     stmt = (
         select(PositionSnapshot, Instrument)
@@ -112,6 +128,54 @@ def load_metrics(
     db: Session, year: int, month: str, as_of: date | None = None
 ) -> list[PositionMetrics]:
     return [compute_position(p, as_of=as_of) for p in load_position_inputs(db, year, month)]
+
+
+def instrument_history(db: Session, identifier: str) -> dict | None:
+    """Evolución histórica de una posición (todos los meses disponibles)."""
+    inst = db.get(Instrument, identifier)
+    if inst is None:
+        return None
+    snaps = db.execute(
+        select(PositionSnapshot).where(PositionSnapshot.instrument_id == identifier)
+    ).scalars().all()
+    if not snaps:
+        return None
+    points = []
+    for s in snaps:
+        mi = month_name_to_index(s.statement_month)
+        points.append(
+            {
+                "year": s.statement_year,
+                "month": s.statement_month,
+                "month_index": mi,
+                "label": report_label(s.statement_year, mi),
+                "report_date": s.report_date,
+                "market_value": _flt(s.estimated_market_value) or 0.0,
+                "market_price": _flt(s.market_price),
+                "cost_basis": _flt(s.total_cost_basis) or 0.0,
+                "quantity": _flt(s.quantity),
+                "current_yield": _flt(s.current_yield),
+                "unrealized_gain_loss": (
+                    (_flt(s.estimated_market_value) or 0.0)
+                    - (_flt(s.total_cost_basis) or 0.0)
+                    if s.total_cost_basis is not None
+                    else 0.0
+                ),
+                "dividends_paid": _flt(s.dividends_paid) or 0.0,
+                "accrued_interest": _flt(s.accrued_interest) or 0.0,
+            }
+        )
+    points.sort(key=lambda p: (p["year"], p["month_index"]))
+    return {
+        "identifier": inst.identifier,
+        "description": inst.description,
+        "classification": inst.classification,
+        "type": inst.type,
+        "sector": inst.sector,
+        "moodys_rating": inst.moodys_rating,
+        "sp_rating": inst.sp_rating,
+        "points": points,
+    }
 
 
 def _flt(v) -> float | None:
@@ -192,8 +256,29 @@ def upsert_parsed_rows(db: Session, rows: list[ParsedRow]) -> dict:
     inst_seen: set[str] = set()
     inserted = updated = 0
 
+    # Mapa descripción -> identificador REAL (no sintético) para reconciliar los
+    # meses en que el extracto trae la acción sin CUSIP/ticker.
+    desc_to_real_id: dict[str, str] = {
+        (d or "").strip().lower(): i
+        for i, d in db.execute(
+            select(Instrument.identifier, Instrument.description).where(
+                Instrument.identifier != Instrument.description
+            )
+        ).all()
+        if d
+    }
+
     for row in rows:
         ident = row.instrument["identifier"]
+        desc = (row.instrument.get("description") or "").strip()
+
+        # Fila con identificador sintético (== descripción): si ya existe un
+        # instrumento REAL con esa misma descripción, reutiliza su identificador.
+        if ident == desc and desc:
+            real = desc_to_real_id.get(desc.lower())
+            if real:
+                ident = real
+                row.instrument["identifier"] = real
 
         inst = inst_cache.get(ident) or db.get(Instrument, ident)
         if inst is None:
@@ -208,6 +293,8 @@ def upsert_parsed_rows(db: Session, rows: list[ParsedRow]) -> dict:
                 if k != "identifier" and v is not None:
                     setattr(inst, k, v)
             inst_seen.add(ident)
+        if ident != desc and desc:
+            desc_to_real_id.setdefault(desc.lower(), ident)
 
         year = int(row.snapshot["statement_year"])
         month = str(row.snapshot["statement_month"]).lower()

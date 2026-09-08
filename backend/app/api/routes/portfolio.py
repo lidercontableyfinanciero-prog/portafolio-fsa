@@ -50,8 +50,8 @@ def dashboard(
     type: str | None = Query(None),
     classification: str | None = None,
     sector: str | None = None,
-    rating_grade: str | None = None,
-    rating_agency: str = Query("moodys", pattern="^(moodys|sp)$"),
+    moodys_grade: str | None = None,
+    sp_grade: str | None = None,
     as_of: date | None = None,
 ):
     year, month = _resolve_period(db, year, month)
@@ -61,17 +61,45 @@ def dashboard(
         type_=type,
         classification=classification,
         sector=sector,
-        rating_grade=rating_grade,
-        rating_agency=rating_agency,
+        moodys_grade=moodys_grade,
+        sp_grade=sp_grade,
     )
-    payload = payload_to_dict(build_dashboard(filtered))
+
+    prev = repo.previous_period(db, year, month)
+    prev_filtered = None
+    prev_label = ""
+    if prev:
+        prev_metrics = repo.load_metrics(db, prev.year, prev.month, as_of=as_of)
+        prev_filtered = filter_positions(
+            prev_metrics,
+            type_=type,
+            classification=classification,
+            sector=sector,
+            moodys_grade=moodys_grade,
+            sp_grade=sp_grade,
+        )
+        prev_label = prev.label
+
+    limite_rf = repo.param_value(db, "peso_max_renta_fija", 0.70)
+    limite_rv = repo.param_value(db, "peso_max_renta_variable", 0.30)
+
+    payload = payload_to_dict(
+        build_dashboard(
+            filtered,
+            prev_positions=prev_filtered,
+            prev_label=prev_label,
+            current_label=f"{month} {year}",
+            limite_rf=limite_rf,
+            limite_rv=limite_rv,
+        )
+    )
     payload["period"] = {"year": year, "month": month}
     payload["applied_filters"] = {
         "type": type,
         "classification": classification,
         "sector": sector,
-        "rating_grade": rating_grade,
-        "rating_agency": rating_agency,
+        "moodys_grade": moodys_grade,
+        "sp_grade": sp_grade,
     }
     return payload
 

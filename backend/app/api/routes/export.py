@@ -30,7 +30,7 @@ def _resolve(db: Session, year: int | None, month: str | None):
 
 
 def _filtered_metrics(
-    db, year, month, type_, classification, sector, rating_grade, rating_agency, as_of
+    db, year, month, type_, classification, sector, moodys_grade, sp_grade, as_of
 ):
     metrics = repo.load_metrics(db, year, month, as_of=as_of)
     return filter_positions(
@@ -38,8 +38,8 @@ def _filtered_metrics(
         type_=type_,
         classification=classification,
         sector=sector,
-        rating_grade=rating_grade,
-        rating_agency=rating_agency,
+        moodys_grade=moodys_grade,
+        sp_grade=sp_grade,
     )
 
 
@@ -74,13 +74,13 @@ def _common_params(
     type: str | None = Query(None),
     classification: str | None = None,
     sector: str | None = None,
-    rating_grade: str | None = None,
-    rating_agency: str = Query("moodys", pattern="^(moodys|sp)$"),
+    moodys_grade: str | None = None,
+    sp_grade: str | None = None,
     as_of: date | None = None,
 ):
     y, m = _resolve(db, year, month)
     metrics = _filtered_metrics(
-        db, y, m, type, classification, sector, rating_grade, rating_agency, as_of
+        db, y, m, type, classification, sector, moodys_grade, sp_grade, as_of
     )
     meta = {
         "period": {"year": y, "month": m},
@@ -88,7 +88,8 @@ def _common_params(
             "tipo": type,
             "clasificación": classification,
             "sector": sector,
-            "calificación": rating_grade,
+            "Moody's": moodys_grade,
+            "S&P": sp_grade,
         },
     }
     return db, metrics, meta, y

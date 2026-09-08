@@ -41,10 +41,31 @@ export interface BreakdownRow {
   label: string;
   costo: number;
   valor_mercado: number;
+  valor_informe: number;
   gp_no_realizada: number;
   pct_participacion: number;
   ingreso_anual_est: number;
   posiciones: number;
+  valor_informe_anterior: number | null;
+  variacion_abs: number | null;
+  variacion_pct: number | null;
+}
+
+export interface ConcentrationLimit {
+  label: string;
+  participacion: number;
+  limite: number;
+  excedente: number;
+  cumple: boolean;
+}
+
+export interface PortfolioVariation {
+  mes_actual: string;
+  mes_anterior: string;
+  valor_actual: number;
+  valor_anterior: number;
+  variacion_abs: number;
+  variacion_pct: number;
 }
 
 export interface RiskAlerts {
@@ -68,6 +89,8 @@ export interface DashboardPayload {
   alerta_emisor: BreakdownRow[];
   limite_cash: BreakdownRow[];
   risk_alerts: RiskAlerts;
+  limites_concentracion: ConcentrationLimit[];
+  variacion_portafolio: PortfolioVariation | null;
   period: { year: number; month: string };
   applied_filters: Record<string, string | null>;
 }
@@ -93,12 +116,20 @@ export interface PositionRow {
   sector: string | null;
   market_value: number;
   cost_basis: number;
+  market_price: number;
+  quantity: number;
   unrealized_gain_loss: number;
   return_on_cost: number;
   valor_informe: number;
   accrued_interest: number;
   annual_income: number;
+  current_yield: number;
   weighted_yield: number;
+  dividends_paid: number;
+  tax: number;
+  tax_rate: number;
+  moodys_rating: string | null;
+  sp_rating: string | null;
   moodys_grade: string;
   sp_grade: string;
   stop_loss: string;
@@ -107,7 +138,36 @@ export interface PositionRow {
   time_alert: string;
   issuer_alert: string;
   cash_limit_alert: string;
+  equity_return_on_cost: number;
+  equity_market_value_return: number;
   sell_indicator: string;
+}
+
+export interface PositionHistoryPoint {
+  year: number;
+  month: string;
+  month_index: number;
+  label: string;
+  report_date: string;
+  market_value: number;
+  market_price: number | null;
+  cost_basis: number;
+  quantity: number | null;
+  current_yield: number | null;
+  unrealized_gain_loss: number;
+  dividends_paid: number;
+  accrued_interest: number;
+}
+
+export interface PositionHistory {
+  identifier: string;
+  description: string;
+  classification: string | null;
+  type: string | null;
+  sector: string | null;
+  moodys_rating: string | null;
+  sp_rating: string | null;
+  points: PositionHistoryPoint[];
 }
 
 export interface PositionsResponse {

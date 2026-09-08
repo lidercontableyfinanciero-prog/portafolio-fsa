@@ -120,7 +120,7 @@ export default function SimuladorFxPage() {
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {FIELDS.map((f) => (
             <label key={f.key} className="flex flex-col gap-1">
-              <span className="text-[11px] font-600 uppercase tracking-wide text-fsa-muted">
+              <span className="text-xs font-500 text-fsa-muted">
                 {f.label}
               </span>
               <input
@@ -142,7 +142,7 @@ export default function SimuladorFxPage() {
 
         <div className="mt-4 flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-600 uppercase tracking-wide text-fsa-muted">
+            <span className="text-xs font-500 text-fsa-muted">
               Sensibilidad TRM desde
             </span>
             <input
@@ -153,7 +153,7 @@ export default function SimuladorFxPage() {
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-600 uppercase tracking-wide text-fsa-muted">
+            <span className="text-xs font-500 text-fsa-muted">
               hasta
             </span>
             <input

@@ -80,7 +80,7 @@ export default function RentabilidadPage() {
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         {cards.map((c) => (
           <Card key={c.label}>
-            <p className="text-[11px] font-600 uppercase tracking-wide text-fsa-muted">
+            <p className="text-xs font-500 text-fsa-muted">
               {c.label}
             </p>
             <p
@@ -117,7 +117,7 @@ export default function RentabilidadPage() {
         </h3>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-fsa-border text-left text-[11px] uppercase tracking-wide text-fsa-muted">
+            <tr className="border-b border-fsa-border text-left text-xs font-500 text-fsa-muted">
               <th className="py-2 pr-3 font-600">Mes</th>
               <th className="py-2 px-3 text-right font-600">R mes (Dietz)</th>
               <th className="py-2 px-3 text-right font-600">Benchmark mes</th>

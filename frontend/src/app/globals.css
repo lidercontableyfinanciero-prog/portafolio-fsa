@@ -18,14 +18,24 @@
   --fsa-muted: #6b7280;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 html,
 body {
-  background: var(--fsa-bg);
+  background: var(--fsa-surface);
   color: var(--fsa-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 body {
   font-feature-settings: "cv02", "cv03", "cv04";
+}
+
+::selection {
+  background: color-mix(in srgb, var(--fsa-teal) 30%, transparent);
 }
 
 .tnum {

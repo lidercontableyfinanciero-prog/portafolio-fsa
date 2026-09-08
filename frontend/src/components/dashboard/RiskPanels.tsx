@@ -144,7 +144,7 @@ function Stat({
 }) {
   return (
     <div className="rounded border border-fsa-border p-3">
-      <p className="text-[11px] font-600 uppercase tracking-wide text-fsa-muted">{label}</p>
+      <p className="text-xs font-500 text-fsa-muted">{label}</p>
       <p
         className="tnum mt-1 font-display text-base font-600"
         style={{ color: danger ? FSA.red : FSA.navy }}

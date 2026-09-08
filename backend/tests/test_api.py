@@ -114,22 +114,35 @@ def test_dashboard_breakdown_by_classification(client, admin_token):
     assert sum(x["pct_participacion"] for x in rows.values()) == pytest.approx(1.0, abs=1e-6)
 
 
-def test_slicer_bond_investment_grade_sp(client, admin_token):
+def test_slicer_grades_independent(client, admin_token):
     # DASHBOARD!K13/L13: Grado de Inversión (S&P) = 23 posiciones / 5.584.137,35
     r = client.get(
         "/api/portfolio/dashboard",
-        params={
-            "year": 2026,
-            "month": "Agosto",
-            "type": "Bond",
-            "rating_grade": "Grado de Inversión",
-            "rating_agency": "sp",
-        },
+        params={"year": 2026, "month": "Agosto", "sp_grade": "Grado de Inversión"},
         headers=auth(admin_token),
     )
     k = r.json()["kpis"]
     assert k["n_posiciones"] == 23
     assert round(k["valor_mercado"], 2) == 5_584_137.35
+    # Moody's independiente: en el extracto INFORME muchos bonos traen "***"/"WR<",
+    # así que el grado de inversión Moody's es reducido (2 posiciones).
+    r2 = client.get(
+        "/api/portfolio/dashboard",
+        params={"year": 2026, "month": "Agosto", "moodys_grade": "Grado de Inversión"},
+        headers=auth(admin_token),
+    )
+    m_inv = r2.json()["kpis"]["n_posiciones"]
+    assert m_inv == 2
+    # ambos a la vez: Moody's IG (2) ∩ S&P IG (23) -> como mucho 2
+    r3 = client.get(
+        "/api/portfolio/dashboard",
+        params={
+            "year": 2026, "month": "Agosto",
+            "moodys_grade": "Grado de Inversión", "sp_grade": "Grado de Inversión",
+        },
+        headers=auth(admin_token),
+    )
+    assert 0 <= r3.json()["kpis"]["n_posiciones"] <= 2
 
 
 def test_periods_and_evolution(client, admin_token):
@@ -208,6 +221,84 @@ def test_dashboard_risk_alerts(client, lector_token):
     assert ra["plazo_prom_vencimiento_bonos"] > 0        # hay bonos
     # coherencia: la suma de posiciones de stop_loss = N° de posiciones
     assert sum(r["posiciones"] for r in d["stop_loss"]) == d["kpis"]["n_posiciones"]
+
+
+def test_limite_cash_solo_contempla_efectivo(client, admin_token):
+    d = client.get(
+        "/api/portfolio/dashboard?year=2026&month=Agosto", headers=auth(admin_token)
+    ).json()
+    # Solo 1 posición de tipo Cash -> el panel de límite de caja suma 1 posición
+    assert sum(r["posiciones"] for r in d["limite_cash"]) == 1
+
+
+def test_concentracion_politica_rf_rv(client, admin_token):
+    d = client.get(
+        "/api/portfolio/dashboard?year=2026&month=Agosto", headers=auth(admin_token)
+    ).json()
+    lims = {c["label"]: c for c in d["limites_concentracion"]}
+    assert lims["Renta Fija"]["limite"] == 0.70
+    assert lims["Renta Variable"]["limite"] == 0.30
+    # Renta Fija ~67,66 % de participación (DASHBOARD) -> cumple el 70 %
+    assert 0.6 < lims["Renta Fija"]["participacion"] < 0.72
+    assert lims["Renta Fija"]["cumple"] is True
+
+
+def test_variacion_vs_mes_anterior(client, lector_token):
+    d = client.get(
+        "/api/portfolio/dashboard?year=2026&month=Agosto", headers=auth(lector_token)
+    ).json()
+    v = d["variacion_portafolio"]
+    assert v["mes_anterior"] == "jul 2026"
+    assert round(v["valor_actual"], 2) == 13_975_106.05      # Resumen!K17
+    assert round(v["valor_anterior"], 2) == 13_773_343.30    # Resumen!J17
+    assert round(v["variacion_pct"], 6) == round(201_762.75 / 13_773_343.30, 6)
+    # por_tipo trae la variación mes a mes
+    bond = next(r for r in d["por_tipo"] if r["label"] == "Bond")
+    assert bond["variacion_abs"] is not None
+
+
+def test_evolution_matches_resumen(client, admin_token):
+    evo = client.get("/api/portfolio/evolution", headers=auth(admin_token)).json()
+    by = {e["label"]: e["valor_informe"] for e in evo}
+    assert round(by["dic 2025"], 2) == 13_498_803.48
+    assert round(by["jul 2026"], 2) == 13_773_343.30
+    assert round(by["ago 2026"], 2) == 13_975_106.05
+    assert len(evo) == 9
+
+
+def test_position_history_endpoint(client, admin_token):
+    # NVIDIA se reconcilia al ticker NVDA (varios meses con y sin CUSIP en el extracto)
+    r = client.get("/api/positions/NVDA/history", headers=auth(admin_token))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["identifier"] == "NVDA"
+    assert len(body["points"]) >= 6          # tiene historia multi-mes
+    p = body["points"][-1]
+    assert "market_value" in p and "current_yield" in p
+    assert body["points"] == sorted(body["points"], key=lambda x: (x["year"], x["month_index"]))
+    # 404 para un id inexistente
+    assert client.get(
+        "/api/positions/NOEXISTE123/history", headers=auth(admin_token)
+    ).status_code == 404
+
+
+def test_equity_reconciled_across_months(client, admin_token):
+    """Una acción sin CUSIP en agosto no debe fragmentarse: NVDA vive en varios meses."""
+    r = client.get("/api/positions/NVDA/history", headers=auth(admin_token)).json()
+    months = {p["month"] for p in r["points"]}
+    assert {"Julio", "Agosto"} <= months
+
+
+def test_positions_new_columns(client, lector_token):
+    r = client.get(
+        "/api/positions?year=2026&month=Agosto&classification=Renta Variable&page_size=5",
+        headers=auth(lector_token),
+    )
+    item = r.json()["items"][0]
+    for f in ("dividends_paid", "tax", "tax_rate", "current_yield",
+              "equity_return_on_cost", "equity_market_value_return",
+              "moodys_rating", "sp_rating"):
+        assert f in item
 
 
 # --------------------------------------------------------------------------- #

@@ -41,7 +41,29 @@ plazo_al_vencimiento  = (hoy - acquired_date) / 360
 alerta_tiempo   = "Revisar" si plazo_inicial_anios > 15
 alerta_emisor   = "Revisar" si total_cost_basis > 500_000
 limite_cash     = "Revision" si market_value < 150_000 o > 200_000
+                  — SOLO aplica a posiciones de tipo Cash; el resto -> "N/A".
 ```
+
+### Rentabilidad de Renta Variable (columnas Z y AA)
+```
+rentab_costo (Z)         = (dividends_paid - tax) / total_cost_basis   (solo Renta Variable)
+rentab_valor_mercado (AA)= (rentab_costo + unrealized_gain_loss) / total_cost_basis
+tasa_impositiva (X)      = tax / dividends_paid   (0 si dividends_paid == 0)
+```
+
+### Límites de concentración por política (ANEXO 2 · hoja Parámetros/Resumen)
+```
+Renta Fija     ≤ 70 % del portafolio   (parámetro peso_max_renta_fija)
+Renta Variable ≤ 30 % del portafolio   (parámetro peso_max_renta_variable)
+```
+El dashboard compara la participación real (valor de mercado por clasificación /
+valor de mercado total) contra el límite y marca "Excede" cuando lo supera.
+
+### Variación mes a mes
+El "total del portafolio" es el **Valor Informe** (`Resumen!` "Suma de Valor Informe":
+agosto-2026 = 13 975 106,05). El dashboard muestra la variación vs. el mes anterior
+—absoluta y % — a nivel de portafolio y por tipo de activo. Con `F = 0` la variación %
+coincide con la rentabilidad Dietz del mes.
 
 ### Rendimiento de Renta Variable
 ```

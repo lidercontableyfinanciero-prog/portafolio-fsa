@@ -42,9 +42,15 @@ const MATRIX_ROWS: {
 ];
 
 export default function EscenariosPage() {
-  const { year, month } = useFilters();
+  const { periods } = useFilters();
+  const latest = periods[periods.length - 1];
+  const [year, setYear] = useState<number | null>(null);
+  const [month, setMonth] = useState<string | null>(null);
+  const effYear = year ?? latest?.year ?? null;
+  const effMonth = month ?? latest?.month ?? null;
+
   const assetsKey =
-    year && month ? `/scenarios/assets?year=${year}&month=${month}` : null;
+    effYear && effMonth ? `/scenarios/assets?year=${effYear}&month=${effMonth}` : null;
   const { data: assets } = useSWR<AssetOpt[]>(assetsKey, fetcher);
 
   const [identifier, setIdentifier] = useState("");
@@ -58,14 +64,14 @@ export default function EscenariosPage() {
   }, [assets, identifier]);
 
   async function run() {
-    if (!identifier || !month) return;
+    if (!identifier || !effMonth) return;
     setBusy(true);
     setError(null);
     try {
       const res = await api.post<ScenarioResponse>("/scenarios", {
         identifier,
-        month,
-        year,
+        month: effMonth,
+        year: effYear,
         pct_sales: pcts.map((p) => p / 100),
       });
       setResult(res);
@@ -98,6 +104,27 @@ export default function EscenariosPage() {
 
         <div className="mt-4 flex flex-wrap items-end gap-3">
           <Select
+            label="Año"
+            value={effYear ? String(effYear) : ""}
+            onChange={(v) => {
+              setYear(Number(v));
+              setResult(null);
+            }}
+            options={[...new Set(periods.map((p) => p.year))].map((y) => ({
+              value: String(y),
+              label: String(y),
+            }))}
+          />
+          <Select
+            label="Mes"
+            value={effMonth ?? ""}
+            onChange={(v) => {
+              setMonth(v);
+              setResult(null);
+            }}
+            options={periods.filter((p) => p.year === effYear).map((p) => p.month)}
+          />
+          <Select
             label="Activo"
             value={identifier}
             onChange={setIdentifier}
@@ -111,7 +138,7 @@ export default function EscenariosPage() {
           />
           {pcts.map((p, i) => (
             <label key={i} className="flex flex-col gap-1">
-              <span className="text-[11px] font-600 uppercase tracking-wide text-fsa-muted">
+              <span className="text-xs font-500 text-fsa-muted">
                 Escenario {i + 1} · % venta
               </span>
               <input
@@ -123,7 +150,7 @@ export default function EscenariosPage() {
                   const v = Number(e.target.value);
                   setPcts((arr) => arr.map((x, j) => (j === i ? v : x)));
                 }}
-                className="min-h-[40px] w-28 rounded border border-fsa-border px-2.5 text-sm focus:border-fsa-blue"
+                className="h-10 w-24 rounded-lg border border-fsa-border px-2.5 text-sm focus:border-fsa-blue"
               />
             </label>
           ))}
@@ -131,9 +158,6 @@ export default function EscenariosPage() {
             {busy ? "Calculando…" : "Calcular escenarios"}
           </Button>
         </div>
-        {!assetsKey ? (
-          <p className="mt-3 text-xs text-fsa-muted">Selecciona año y mes en los segmentadores.</p>
-        ) : null}
       </Card>
 
       {error ? <ErrorState message={error} /> : null}
@@ -156,7 +180,7 @@ export default function EscenariosPage() {
             <div className="overflow-x-auto scroll-thin">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-fsa-border text-left text-[11px] uppercase tracking-wide text-fsa-muted">
+                  <tr className="border-b border-fsa-border text-left text-xs font-500 text-fsa-muted">
                     <th className="py-2 pr-3 font-600">Concepto</th>
                     {result.scenarios.map((s, i) => (
                       <th key={i} className="py-2 px-3 text-right font-600">

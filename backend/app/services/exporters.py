@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 from datetime import datetime
+from pathlib import Path
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -13,12 +14,30 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
+    Image,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
     Table,
     TableStyle,
 )
+
+LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "logo_fsa.png"
+
+
+def _logo_flowable(width_mm: float = 34):
+    """Logo institucional para la esquina superior izquierda del PDF."""
+    if not LOGO_PATH.exists():
+        return None
+    try:
+        img = Image(str(LOGO_PATH))
+        ratio = img.imageHeight / img.imageWidth
+        img.drawWidth = width_mm * mm
+        img.drawHeight = width_mm * mm * ratio
+        img.hAlign = "LEFT"
+        return img
+    except Exception:  # noqa: BLE001
+        return None
 
 NAVY = colors.HexColor("#0E2841")
 GREY = colors.HexColor("#6B7280")
@@ -41,12 +60,28 @@ POSITION_COLUMNS: list[tuple[str, str]] = [
     ("return_on_cost", "Rentab. s/ Costo"),
     ("annual_income", "Ingreso Anual Est. (USD)"),
     ("accrued_interest", "Interés Acumulado (USD)"),
+    ("dividends_paid", "Intereses/Dividendos Pagados (USD)"),
+    ("tax", "Impuesto (USD)"),
+    ("tax_rate", "Tasa Impositiva"),
+    ("current_yield", "Yield Actual"),
+    ("equity_return_on_cost", "Rentab. Costo (Renta Var.)"),
+    ("equity_market_value_return", "Rentab. Valor Mercado (Renta Var.)"),
+    ("moodys_rating", "Moody's"),
     ("moodys_grade", "Grado Moody's"),
+    ("sp_rating", "S&P"),
     ("sp_grade", "Grado S&P"),
     ("stop_loss", "Indicador Stop-Loss"),
     ("time_alert", "Alerta Tiempo"),
     ("issuer_alert", "Alerta Emisor"),
 ]
+_PCT_COLS = {
+    "return_on_cost", "tax_rate", "current_yield",
+    "equity_return_on_cost", "equity_market_value_return",
+}
+_MONEY_COLS = {
+    "cost_basis", "market_value", "unrealized_gain_loss", "annual_income",
+    "accrued_interest", "dividends_paid", "tax",
+}
 
 _MONEY = "#,##0.00"
 _PCT = "0.00%"
@@ -89,13 +124,10 @@ def positions_to_xlsx(rows: list[dict], meta: dict) -> bytes:
     for r in rows:
         ws.append([r.get(key) for key, _ in POSITION_COLUMNS])
     for idx, (key, _) in enumerate(POSITION_COLUMNS, start=1):
-        if key in ("cost_basis", "market_value", "unrealized_gain_loss",
-                   "annual_income", "accrued_interest"):
+        fmt = _MONEY if key in _MONEY_COLS else _PCT if key in _PCT_COLS else None
+        if fmt:
             for cell in ws[get_column_letter(idx)][1:]:
-                cell.number_format = _MONEY
-        if key == "return_on_cost":
-            for cell in ws[get_column_letter(idx)][1:]:
-                cell.number_format = _PCT
+                cell.number_format = fmt
     ws.freeze_panes = "A2"
     _autosize(ws)
 
@@ -272,7 +304,11 @@ def positions_to_pdf(rows: list[dict], meta: dict) -> bytes:
         title="Portafolio FSA — Posiciones",
     )
     ss = _pdf_styles()
-    story = [
+    story = []
+    logo = _logo_flowable()
+    if logo is not None:
+        story += [logo, Spacer(1, 4)]
+    story += [
         Paragraph("Portafolio FSA — Posiciones", ss["FSATitle"]),
         Paragraph(_meta_line(meta), ss["FSAMeta"]),
         Spacer(1, 6),
@@ -319,7 +355,11 @@ def dashboard_to_pdf(dash: dict, evolution: list[dict], twr: dict, meta: dict) -
     ss = _pdf_styles()
     k = dash["kpis"]
     alfa = twr.get("cumulative_twr", 0) - twr.get("cumulative_benchmark", 0)
-    story = [
+    story = []
+    logo = _logo_flowable()
+    if logo is not None:
+        story += [logo, Spacer(1, 4)]
+    story += [
         Paragraph("Portafolio FSA — Resumen del Dashboard", ss["FSATitle"]),
         Paragraph(_meta_line(meta), ss["FSAMeta"]),
         Spacer(1, 8),

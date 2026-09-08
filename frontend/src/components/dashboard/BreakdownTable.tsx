@@ -18,7 +18,7 @@ export function BreakdownTable({
       <div className="overflow-x-auto scroll-thin">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-fsa-border text-left text-[11px] uppercase tracking-wide text-fsa-muted">
+            <tr className="border-b border-fsa-border text-left text-xs font-500 text-fsa-muted">
               <th className="py-2 pr-3 font-600">Categoría</th>
               <th className="py-2 px-3 text-right font-600">Costo</th>
               <th className="py-2 px-3 text-right font-600">V. Mercado</th>

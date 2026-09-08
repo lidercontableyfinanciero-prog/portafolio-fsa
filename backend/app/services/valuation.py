@@ -97,9 +97,25 @@ def issuer_alert(cost_basis: float | None) -> str:
     return "Revisar" if _f(cost_basis) > CONCENTRATION_LIMIT_USD else "OK"
 
 
-def cash_limit_alert(market_value: float | None) -> str:
+def cash_limit_alert(market_value: float | None, type_: str | None = None) -> str:
+    """Columna AO — límite de caja. Solo aplica a posiciones de tipo Cash."""
+    if type_ is not None and (type_ or "").strip().lower() != "cash":
+        return "N/A"
     mv = _f(market_value)
     return "Revision" if mv < CASH_LIMIT_LOW or mv > CASH_LIMIT_HIGH else "OK"
+
+
+def market_value_return(
+    equity_roc: float, gain_loss: float, cost_basis: float | None, classification: str | None
+) -> float:
+    """Columna AA — Rentabilidad Valor de Mercado (solo Renta Variable).
+
+    Fórmula del Excel: (Rentabilidad Costo + Unrealized G/L) / Total Cost Basis.
+    """
+    if (classification or "").strip().lower() != "renta variable":
+        return 0.0
+    cb = _f(cost_basis)
+    return (equity_roc + gain_loss) / cb if cb else 0.0
 
 
 def equity_return_on_cost(
@@ -167,12 +183,20 @@ class PositionMetrics:
     sector: str | None
     market_value: float
     cost_basis: float
+    market_price: float
+    quantity: float
     unrealized_gain_loss: float
     return_on_cost: float
     valor_informe: float
     accrued_interest: float
     annual_income: float
+    current_yield: float
     weighted_yield: float
+    dividends_paid: float
+    tax: float
+    tax_rate: float
+    moodys_rating: str | None
+    sp_rating: str | None
     moodys_grade: str
     sp_grade: str
     stop_loss: str
@@ -182,6 +206,7 @@ class PositionMetrics:
     issuer_alert: str
     cash_limit_alert: str
     equity_return_on_cost: float
+    equity_market_value_return: float
     unit_value_cost: float | None
     unit_value_market: float | None
     sell_indicator: str
@@ -201,6 +226,7 @@ def compute_position(pos: PositionInput, as_of: date | None = None) -> PositionM
         if uv_mkt is not None and target is not None and uv_mkt > target
         else "No alcanzado"
     )
+    eq_roc = equity_return_on_cost(pos.dividends_paid, pos.tax, cb, pos.classification)
     return PositionMetrics(
         identifier=pos.identifier,
         description=pos.description,
@@ -209,12 +235,20 @@ def compute_position(pos: PositionInput, as_of: date | None = None) -> PositionM
         sector=pos.sector,
         market_value=mv,
         cost_basis=cb,
+        market_price=_f(pos.market_price),
+        quantity=_f(pos.quantity),
         unrealized_gain_loss=gl,
         return_on_cost=return_on_cost(gl, cb),
         valor_informe=valor_informe(mv, pos.accrued_interest, pos.type),
         accrued_interest=_f(pos.accrued_interest),
         annual_income=_f(pos.annual_income),
+        current_yield=_f(pos.current_yield),
         weighted_yield=(_f(pos.annual_income) / mv if mv else 0.0),
+        dividends_paid=_f(pos.dividends_paid),
+        tax=_f(pos.tax),
+        tax_rate=tax_rate(pos.tax, pos.dividends_paid),
+        moodys_rating=pos.moodys_rating,
+        sp_rating=pos.sp_rating,
         moodys_grade=moodys_grade(pos.moodys_rating),
         sp_grade=sp_grade(pos.sp_rating),
         stop_loss=stop_loss_indicator(gl, cb),
@@ -222,15 +256,11 @@ def compute_position(pos: PositionInput, as_of: date | None = None) -> PositionM
         term_to_maturity_years=term_to_maturity_years(pos.acquired_date, as_of),
         time_alert=time_alert(it),
         issuer_alert=issuer_alert(cb),
-        cash_limit_alert=cash_limit_alert(mv),
-        equity_return_on_cost=equity_return_on_cost(
-            pos.dividends_paid, pos.tax, cb, pos.classification
-        ),
+        cash_limit_alert=cash_limit_alert(mv, pos.type),
+        equity_return_on_cost=eq_roc,
+        equity_market_value_return=market_value_return(eq_roc, gl, cb, pos.classification),
         unit_value_cost=unit_value_cost(cb, pos.quantity),
         unit_value_market=uv_mkt,
         sell_indicator=sell_indicator,
-        extras={
-            "tax_rate": tax_rate(pos.tax, pos.dividends_paid),
-            "accrued_coupon": accrued_coupon(cb, pos.coupon_rate, pos.type),
-        },
+        extras={"accrued_coupon": accrued_coupon(cb, pos.coupon_rate, pos.type)},
     )

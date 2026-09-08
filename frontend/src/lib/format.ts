@@ -42,3 +42,15 @@ export const fmtCompact = (v: number) => {
 };
 
 export const monthShort = (m: string) => m.slice(0, 3);
+
+/** Delta con signo explícito: +$1,234 / -$1,234 */
+export const fmtDeltaUSD = (v: number | null | undefined) => {
+  if (v == null || Number.isNaN(v)) return "—";
+  const s = fmtUSD(Math.abs(v));
+  return v >= 0 ? `+${s}` : `-${s}`;
+};
+
+export const fmtDeltaPct = (v: number | null | undefined) => {
+  if (v == null || Number.isNaN(v)) return "—";
+  return (v >= 0 ? "+" : "") + pct2.format(v);
+};

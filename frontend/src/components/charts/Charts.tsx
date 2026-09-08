@@ -199,9 +199,16 @@ export function TrendLines({
 } & WithHeight) {
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={data} margin={{ top: 8, right: 18, bottom: 4, left: 4 }}>
+      <LineChart data={data} margin={{ top: 8, right: 18, bottom: 18, left: 4 }}>
         <CartesianGrid stroke={gridStroke} />
-        <XAxis dataKey="label" tick={axis} />
+        <XAxis
+          dataKey="label"
+          tick={{ ...axis, fontSize: 10 }}
+          interval={0}
+          angle={-30}
+          textAnchor="end"
+          height={44}
+        />
         <YAxis
           tick={axis}
           width={48}

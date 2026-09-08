@@ -18,8 +18,8 @@ export interface FilterState {
   type: string;
   classification: string;
   sector: string;
-  ratingGrade: string;
-  ratingAgency: "moodys" | "sp";
+  moodysGrade: string;
+  spGrade: string;
 }
 
 interface FiltersCtx extends FilterState {
@@ -28,8 +28,8 @@ interface FiltersCtx extends FilterState {
   periods: Period[];
   options: FilterOptions | undefined;
   ready: boolean;
-  /** query string para /portfolio/* y /positions */
   query: string;
+  activeCount: number;
 }
 
 const EMPTY: FilterState = {
@@ -38,18 +38,29 @@ const EMPTY: FilterState = {
   type: "",
   classification: "",
   sector: "",
-  ratingGrade: "",
-  ratingAgency: "moodys",
+  moodysGrade: "",
+  spGrade: "",
 };
 
 const Ctx = createContext<FiltersCtx | null>(null);
+
+export function buildQuery(s: FilterState): string {
+  const p = new URLSearchParams();
+  if (s.year) p.set("year", String(s.year));
+  if (s.month) p.set("month", s.month);
+  if (s.type) p.set("type", s.type);
+  if (s.classification) p.set("classification", s.classification);
+  if (s.sector) p.set("sector", s.sector);
+  if (s.moodysGrade) p.set("moodys_grade", s.moodysGrade);
+  if (s.spGrade) p.set("sp_grade", s.spGrade);
+  return p.toString();
+}
 
 export function FiltersProvider({ children }: { children: React.ReactNode }) {
   const { data: periods } = useSWR<Period[]>("/portfolio/periods", fetcher);
   const { data: options } = useSWR<FilterOptions>("/portfolio/filters", fetcher);
   const [state, setState] = useState<FilterState>(EMPTY);
 
-  // Inicializa con el período más reciente
   useEffect(() => {
     if (periods && periods.length && state.year == null) {
       const last = periods[periods.length - 1];
@@ -60,29 +71,23 @@ export function FiltersProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<FiltersCtx>(() => {
     const set: FiltersCtx["set"] = (key, val) =>
       setState((s) => ({ ...s, [key]: val }));
-    const params = new URLSearchParams();
-    if (state.year) params.set("year", String(state.year));
-    if (state.month) params.set("month", state.month);
-    if (state.type) params.set("type", state.type);
-    if (state.classification) params.set("classification", state.classification);
-    if (state.sector) params.set("sector", state.sector);
-    if (state.ratingGrade) {
-      params.set("rating_grade", state.ratingGrade);
-      params.set("rating_agency", state.ratingAgency);
-    }
+    const activeCount = [
+      state.type,
+      state.classification,
+      state.sector,
+      state.moodysGrade,
+      state.spGrade,
+    ].filter(Boolean).length;
     return {
       ...state,
       set,
       reset: () =>
-        setState((s) => ({
-          ...EMPTY,
-          year: s.year,
-          month: s.month,
-        })),
+        setState((s) => ({ ...EMPTY, year: s.year, month: s.month })),
       periods: periods ?? [],
       options,
       ready: state.year != null,
-      query: params.toString(),
+      query: buildQuery(state),
+      activeCount,
     };
   }, [state, periods, options]);
 

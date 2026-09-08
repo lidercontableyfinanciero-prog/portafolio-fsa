@@ -14,8 +14,10 @@ from app.services.aggregations import filter_positions
 router = APIRouter(prefix="/positions", tags=["positions"], dependencies=[Depends(get_current_user)])
 
 _SORTABLE = {
-    "description", "classification", "type", "sector", "market_value", "cost_basis",
-    "unrealized_gain_loss", "return_on_cost", "annual_income", "stop_loss",
+    "description", "identifier", "classification", "type", "sector", "market_value",
+    "cost_basis", "unrealized_gain_loss", "return_on_cost", "annual_income",
+    "current_yield", "dividends_paid", "tax", "tax_rate", "equity_return_on_cost",
+    "equity_market_value_return", "stop_loss", "moodys_grade", "sp_grade",
 }
 
 
@@ -27,13 +29,13 @@ def list_positions(
     type: str | None = Query(None),
     classification: str | None = None,
     sector: str | None = None,
-    rating_grade: str | None = None,
-    rating_agency: str = Query("moodys", pattern="^(moodys|sp)$"),
+    moodys_grade: str | None = None,
+    sp_grade: str | None = None,
     search: str | None = None,
     sort_by: str = "market_value",
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(25, ge=1, le=200),
+    page_size: int = Query(25, ge=1, le=500),
     as_of: date | None = None,
 ):
     if year is None or month is None:
@@ -48,15 +50,20 @@ def list_positions(
         type_=type,
         classification=classification,
         sector=sector,
-        rating_grade=rating_grade,
-        rating_agency=rating_agency,
+        moodys_grade=moodys_grade,
+        sp_grade=sp_grade,
     )
     if search:
         s = search.lower()
         rows = [r for r in rows if s in r.description.lower() or s in r.identifier.lower()]
 
     key = sort_by if sort_by in _SORTABLE else "market_value"
-    rows.sort(key=lambda r: (getattr(r, key) is None, getattr(r, key)), reverse=(sort_dir == "desc"))
+
+    def sort_key(r):
+        v = getattr(r, key)
+        return (v is None, (v if isinstance(v, (int, float)) else str(v).lower()))
+
+    rows.sort(key=sort_key, reverse=(sort_dir == "desc"))
 
     total = len(rows)
     start = (page - 1) * page_size
@@ -68,3 +75,12 @@ def list_positions(
         "page_size": page_size,
         "items": [asdict(r) for r in page_rows],
     }
+
+
+@router.get("/{identifier:path}/history")
+def position_history(identifier: str, db: Session = Depends(get_db)):
+    """Evolución histórica del valor de mercado y el yield de una posición."""
+    data = repo.instrument_history(db, identifier)
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"No se encontró la posición {identifier!r}.")
+    return data

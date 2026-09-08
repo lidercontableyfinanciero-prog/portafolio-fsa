@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field
 
+from app.services.constants import EQUITY_MAX_WEIGHT, FIXED_INCOME_MAX_WEIGHT
 from app.services.valuation import PositionMetrics
 
 
@@ -29,10 +30,15 @@ class BreakdownRow:
     label: str
     costo: float = 0.0
     valor_mercado: float = 0.0
+    valor_informe: float = 0.0
     gp_no_realizada: float = 0.0
     pct_participacion: float = 0.0
     ingreso_anual_est: float = 0.0
     posiciones: int = 0
+    # Variación respecto al período anterior (solo se rellena en algunos cortes)
+    valor_informe_anterior: float | None = None
+    variacion_abs: float | None = None
+    variacion_pct: float | None = None
 
 
 @dataclass(slots=True)
@@ -41,9 +47,28 @@ class RiskAlerts:
     vencimientos_1a_posiciones: int = 0
     vencimientos_1a_valor: float = 0.0
     plazo_prom_vencimiento_bonos: float = 0.0
-    emisores_sobre_limite: int = 0          # cost basis > 500.000 USD
+    emisores_sobre_limite: int = 0
     valor_emisores_sobre_limite: float = 0.0
-    posiciones_stop_loss_venta: int = 0     # "Evaluar Venta" + "Ejecutar Venta"
+    posiciones_stop_loss_venta: int = 0
+
+
+@dataclass(slots=True)
+class ConcentrationLimit:
+    label: str
+    participacion: float = 0.0
+    limite: float = 0.0
+    excedente: float = 0.0          # participacion - limite (positivo => incumple)
+    cumple: bool = True
+
+
+@dataclass(slots=True)
+class PortfolioVariation:
+    mes_actual: str = ""
+    mes_anterior: str = ""
+    valor_actual: float = 0.0
+    valor_anterior: float = 0.0
+    variacion_abs: float = 0.0
+    variacion_pct: float = 0.0
 
 
 @dataclass(slots=True)
@@ -59,10 +84,12 @@ class DashboardPayload:
     alerta_emisor: list[BreakdownRow] = field(default_factory=list)
     limite_cash: list[BreakdownRow] = field(default_factory=list)
     risk_alerts: RiskAlerts = field(default_factory=RiskAlerts)
+    limites_concentracion: list[ConcentrationLimit] = field(default_factory=list)
+    variacion_portafolio: PortfolioVariation | None = None
 
 
 # --------------------------------------------------------------------------- #
-# Filtros
+# Filtros — Moody's y S&P se consultan de forma independiente y simultánea
 # --------------------------------------------------------------------------- #
 def filter_positions(
     positions: Iterable[PositionMetrics],
@@ -70,8 +97,8 @@ def filter_positions(
     type_: str | None = None,
     classification: str | None = None,
     sector: str | None = None,
-    rating_grade: str | None = None,      # "Grado de Inversión" / "Grado Especulativo"
-    rating_agency: str = "moodys",         # "moodys" | "sp"
+    moodys_grade: str | None = None,   # "Grado de Inversión" / "Grado Especulativo"
+    sp_grade: str | None = None,
 ) -> list[PositionMetrics]:
     out = []
     for p in positions:
@@ -81,10 +108,10 @@ def filter_positions(
             continue
         if sector and (p.sector or "") != sector:
             continue
-        if rating_grade:
-            grade = p.moodys_grade if rating_agency == "moodys" else p.sp_grade
-            if grade != rating_grade:
-                continue
+        if moodys_grade and p.moodys_grade != moodys_grade:
+            continue
+        if sp_grade and p.sp_grade != sp_grade:
+            continue
         out.append(p)
     return out
 
@@ -125,6 +152,7 @@ def _breakdown(
         row = rows.setdefault(lbl, BreakdownRow(label=lbl))
         row.costo += p.cost_basis
         row.valor_mercado += p.market_value
+        row.valor_informe += p.valor_informe
         row.gp_no_realizada += p.unrealized_gain_loss
         row.ingreso_anual_est += p.annual_income
         if p.market_value > 0:
@@ -135,6 +163,17 @@ def _breakdown(
             row.valor_mercado / total_market_value if total_market_value else 0.0
         )
     return sorted(rows.values(), key=lambda r: r.valor_mercado, reverse=True)
+
+
+def _apply_prev(rows: list[BreakdownRow], prev: list[BreakdownRow]) -> None:
+    """Añade la variación mes a mes (sobre Valor Informe) a cada fila."""
+    prev_by = {r.label: r.valor_informe for r in prev}
+    for r in rows:
+        pv = prev_by.get(r.label)
+        r.valor_informe_anterior = pv
+        if pv is not None:
+            r.variacion_abs = r.valor_informe - pv
+            r.variacion_pct = (r.variacion_abs / pv) if pv else None
 
 
 def _risk_alerts(positions: list[PositionMetrics]) -> RiskAlerts:
@@ -158,13 +197,52 @@ def _risk_alerts(positions: list[PositionMetrics]) -> RiskAlerts:
     return ra
 
 
-def build_dashboard(positions: list[PositionMetrics]) -> DashboardPayload:
+def _concentration_limits(
+    por_clasificacion: list[BreakdownRow],
+    *,
+    limite_rf: float,
+    limite_rv: float,
+) -> list[ConcentrationLimit]:
+    """ANEXO 2 de la hoja Parametros / Resumen: Renta Fija ≤ 70 %, Renta Variable ≤ 30 %."""
+    by = {r.label: r.pct_participacion for r in por_clasificacion}
+    out = []
+    for label, limite in (("Renta Fija", limite_rf), ("Renta Variable", limite_rv)):
+        part = by.get(label, 0.0)
+        exc = part - limite
+        out.append(
+            ConcentrationLimit(
+                label=label,
+                participacion=part,
+                limite=limite,
+                excedente=exc,
+                cumple=exc <= 1e-9,
+            )
+        )
+    return out
+
+
+def build_dashboard(
+    positions: list[PositionMetrics],
+    *,
+    prev_positions: list[PositionMetrics] | None = None,
+    prev_label: str = "",
+    current_label: str = "",
+    limite_rf: float = FIXED_INCOME_MAX_WEIGHT,
+    limite_rv: float = EQUITY_MAX_WEIGHT,
+) -> DashboardPayload:
     kpis = compute_kpis(positions)
     tmv = kpis.valor_mercado
-    return DashboardPayload(
+
+    por_clasificacion = _breakdown(
+        positions, lambda p: p.classification, total_market_value=tmv
+    )
+    por_tipo = _breakdown(positions, lambda p: p.type, total_market_value=tmv)
+    cash_positions = [p for p in positions if (p.type or "").lower() == "cash"]
+
+    payload = DashboardPayload(
         kpis=kpis,
-        por_clasificacion=_breakdown(positions, lambda p: p.classification, total_market_value=tmv),
-        por_tipo=_breakdown(positions, lambda p: p.type, total_market_value=tmv),
+        por_clasificacion=por_clasificacion,
+        por_tipo=por_tipo,
         por_sector=_breakdown(positions, lambda p: p.sector, total_market_value=tmv),
         calidad_moodys=_breakdown(
             positions, lambda p: p.moodys_grade, total_market_value=tmv,
@@ -183,12 +261,39 @@ def build_dashboard(positions: list[PositionMetrics]) -> DashboardPayload:
             positions, lambda p: p.issuer_alert, total_market_value=tmv,
             fill_labels=["OK", "Revisar"],
         ),
+        # Solo contempla las posiciones de tipo Cash
         limite_cash=_breakdown(
-            positions, lambda p: p.cash_limit_alert, total_market_value=tmv,
+            cash_positions, lambda p: p.cash_limit_alert, total_market_value=tmv,
             fill_labels=["OK", "Revision"],
         ),
         risk_alerts=_risk_alerts(positions),
+        limites_concentracion=_concentration_limits(
+            por_clasificacion, limite_rf=limite_rf, limite_rv=limite_rv
+        ),
     )
+
+    if prev_positions is not None:
+        prev_tipo = _breakdown(
+            prev_positions, lambda p: p.type,
+            total_market_value=sum(p.market_value for p in prev_positions),
+        )
+        _apply_prev(payload.por_tipo, prev_tipo)
+        prev_cls = _breakdown(
+            prev_positions, lambda p: p.classification,
+            total_market_value=sum(p.market_value for p in prev_positions),
+        )
+        _apply_prev(payload.por_clasificacion, prev_cls)
+
+        prev_vi = sum(p.valor_informe for p in prev_positions)
+        payload.variacion_portafolio = PortfolioVariation(
+            mes_actual=current_label,
+            mes_anterior=prev_label,
+            valor_actual=kpis.valor_informe,
+            valor_anterior=prev_vi,
+            variacion_abs=kpis.valor_informe - prev_vi,
+            variacion_pct=((kpis.valor_informe - prev_vi) / prev_vi) if prev_vi else 0.0,
+        )
+    return payload
 
 
 def payload_to_dict(payload: DashboardPayload) -> dict:
@@ -204,4 +309,10 @@ def payload_to_dict(payload: DashboardPayload) -> dict:
         "alerta_emisor": [asdict(r) for r in payload.alerta_emisor],
         "limite_cash": [asdict(r) for r in payload.limite_cash],
         "risk_alerts": asdict(payload.risk_alerts),
+        "limites_concentracion": [asdict(r) for r in payload.limites_concentracion],
+        "variacion_portafolio": (
+            asdict(payload.variacion_portafolio)
+            if payload.variacion_portafolio
+            else None
+        ),
     }
