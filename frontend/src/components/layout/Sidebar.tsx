@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import {
   BarChart3,
+  CalendarRange,
   LayoutDashboard,
   LineChart,
   TableProperties,
@@ -17,6 +18,7 @@ import { cn } from "@/lib/cn";
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/historico", label: "Histórico", icon: CalendarRange },
   { href: "/rentabilidad", label: "Rentabilidad", icon: TrendingUp },
   { href: "/escenarios", label: "Escenarios", icon: BarChart3 },
   { href: "/simulador-fx", label: "Simulador FX", icon: LineChart },

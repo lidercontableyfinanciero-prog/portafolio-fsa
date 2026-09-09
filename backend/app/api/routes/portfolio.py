@@ -108,3 +108,88 @@ def dashboard(
 def evolution(db: Session = Depends(get_db)):
     """Serie mensual del portafolio (para el gráfico de línea Valor vs Costo)."""
     return repo.monthly_portfolio_values(db)
+
+
+@router.get("/historical")
+def historical(db: Session = Depends(get_db)):
+    """Análisis horizontal: métricas en filas, meses en columnas (consecutivas)."""
+    from app.models.monthly_return import MonthlyReturn
+    from app.services.twr import MonthlyReturnInput, time_weighted_return
+
+    series = repo.monthly_portfolio_values(db)  # ya viene ordenado cronológicamente
+    periods = [
+        {
+            "year": b["year"],
+            "month": b["month"],
+            "month_index": b["month_index"],
+            "label": b["label"],
+        }
+        for b in series
+    ]
+
+    # Dietz / TWR por período
+    mrs = {
+        (m.period_year, m.period_month): m
+        for m in db.query(MonthlyReturn).all()
+    }
+    twr_inputs = [
+        MonthlyReturnInput(
+            year=b["year"],
+            month=b["month_index"],
+            portfolio_return=(
+                float(mrs[(b["year"], b["month_index"])].dietz_return)
+                if (b["year"], b["month_index"]) in mrs
+                and mrs[(b["year"], b["month_index"])].dietz_return is not None
+                else None
+            ),
+        )
+        for b in series
+    ]
+    twr = {(r.year, r.month): r for r in time_weighted_return(twr_inputs).rows}
+
+    def col(getter):
+        return [getter(i, b) for i, b in enumerate(series)]
+
+    prev_vi = [None] + [series[i - 1]["valor_informe"] for i in range(1, len(series))]
+
+    rows = [
+        {"key": "valor_mercado", "label": "Valor de Mercado", "kind": "money",
+         "values": col(lambda i, b: b["valor_mercado"])},
+        {"key": "costo", "label": "Costo", "kind": "money",
+         "values": col(lambda i, b: b["costo"])},
+        {"key": "valor_informe", "label": "Total del portafolio (Valor Informe)",
+         "kind": "money", "values": col(lambda i, b: b["valor_informe"])},
+        {"key": "gp_no_realizada", "label": "Ganancia/(Pérdida) no realizada",
+         "kind": "money", "values": col(lambda i, b: b["gp_no_realizada"])},
+        {"key": "rentab_sobre_costo", "label": "Rentabilidad s/ Costo", "kind": "pct",
+         "values": col(lambda i, b: b["rentab_sobre_costo"])},
+        {"key": "dietz", "label": "Rentabilidad del mes (Dietz)", "kind": "pct",
+         "values": col(
+             lambda i, b: (
+                 twr[(b["year"], b["month_index"])].portfolio_return
+                 if (b["year"], b["month_index"]) in twr
+                 else None
+             )
+         )},
+        {"key": "twr_acumulado", "label": "Rentabilidad acumulada (TWR)", "kind": "pct",
+         "values": col(
+             lambda i, b: (
+                 twr[(b["year"], b["month_index"])].cumulative_twr
+                 if (b["year"], b["month_index"]) in twr
+                 else None
+             )
+         )},
+        {"key": "variacion_abs", "label": "Variación vs mes anterior", "kind": "money",
+         "values": col(
+             lambda i, b: None if prev_vi[i] is None else b["valor_informe"] - prev_vi[i]
+         )},
+        {"key": "variacion_pct", "label": "Variación % vs mes anterior", "kind": "pct",
+         "values": col(
+             lambda i, b: (
+                 None
+                 if not prev_vi[i]
+                 else (b["valor_informe"] - prev_vi[i]) / prev_vi[i]
+             )
+         )},
+    ]
+    return {"periods": periods, "rows": rows}

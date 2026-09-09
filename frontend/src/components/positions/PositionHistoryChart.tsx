@@ -29,9 +29,9 @@ export function PositionHistoryChart({ identifier }: { identifier: string }) {
   if (data.points.length < 2) {
     return (
       <div className="rounded-lg border border-fsa-border bg-fsa-surface/60 p-4 text-sm text-fsa-muted">
-        <span className="font-600 text-fsa-navy">{data.description}</span> solo tiene un
-        período registrado ({data.points[0]?.label ?? "—"}); aún no hay serie histórica
-        para graficar.
+        <span className="font-600 text-fsa-navy">{data.description}</span> es una posición
+        nueva: solo aparece en el extracto de{" "}
+        {data.points[0]?.label ?? "—"}, por lo que todavía no hay serie para graficar.
       </div>
     );
   }

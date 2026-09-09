@@ -266,6 +266,37 @@ def test_evolution_matches_resumen(client, admin_token):
     assert len(evo) == 9
 
 
+def test_historical_matrix(client, lector_token):
+    h = client.get("/api/portfolio/historical", headers=auth(lector_token)).json()
+    labels = [p["label"] for p in h["periods"]]
+    assert labels == [
+        "dic 2025", "ene 2026", "feb 2026", "mar 2026", "abr 2026",
+        "may 2026", "jun 2026", "jul 2026", "ago 2026",
+    ]
+    rows = {r["key"]: r for r in h["rows"]}
+    for k in ("valor_mercado", "gp_no_realizada", "rentab_sobre_costo",
+              "valor_informe", "dietz", "twr_acumulado", "variacion_abs"):
+        assert k in rows and len(rows[k]["values"]) == 9
+
+    vi = rows["valor_informe"]["values"]
+    assert round(vi[0], 2) == 13_498_803.48       # dic 2025
+    assert round(vi[-1], 2) == 13_975_106.05      # ago 2026
+    # variación: primer mes sin dato, agosto = +201.762,75
+    assert rows["variacion_abs"]["values"][0] is None
+    assert round(rows["variacion_abs"]["values"][-1], 2) == 201_762.75
+    # Dietz de agosto ~ 1,4649 %
+    assert round(rows["dietz"]["values"][-1], 4) == 0.0146
+
+
+def test_identifier_normalization_merges_history(client, admin_token):
+    """Bonos con sufijo "(CUSIP)" / errata O->0 deben tener 9 meses de histórico."""
+    for cusip in ("02209SAM5", "61774AAF0", "P9379RBC0"):
+        h = client.get(f"/api/positions/{cusip}/history", headers=auth(admin_token))
+        assert h.status_code == 200, cusip
+        months = {p["month"] for p in h.json()["points"]}
+        assert len(months) == 9, f"{cusip}: {sorted(months)}"
+
+
 def test_position_history_endpoint(client, admin_token):
     # NVIDIA se reconcilia al ticker NVDA (varios meses con y sin CUSIP en el extracto)
     r = client.get("/api/positions/NVDA/history", headers=auth(admin_token))

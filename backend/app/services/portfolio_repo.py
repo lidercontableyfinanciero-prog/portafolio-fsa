@@ -140,31 +140,44 @@ def instrument_history(db: Session, identifier: str) -> dict | None:
     ).scalars().all()
     if not snaps:
         return None
-    points = []
+
+    # Un CUSIP puede tener varios lotes por mes -> se agregan en un solo punto.
+    by_month: dict[tuple[int, int], dict] = {}
     for s in snaps:
         mi = month_name_to_index(s.statement_month)
-        points.append(
+        p = by_month.setdefault(
+            (s.statement_year, mi),
             {
                 "year": s.statement_year,
                 "month": s.statement_month,
                 "month_index": mi,
                 "label": report_label(s.statement_year, mi),
                 "report_date": s.report_date,
-                "market_value": _flt(s.estimated_market_value) or 0.0,
-                "market_price": _flt(s.market_price),
-                "cost_basis": _flt(s.total_cost_basis) or 0.0,
-                "quantity": _flt(s.quantity),
-                "current_yield": _flt(s.current_yield),
-                "unrealized_gain_loss": (
-                    (_flt(s.estimated_market_value) or 0.0)
-                    - (_flt(s.total_cost_basis) or 0.0)
-                    if s.total_cost_basis is not None
-                    else 0.0
-                ),
-                "dividends_paid": _flt(s.dividends_paid) or 0.0,
-                "accrued_interest": _flt(s.accrued_interest) or 0.0,
-            }
+                "market_value": 0.0,
+                "cost_basis": 0.0,
+                "quantity": 0.0,
+                "dividends_paid": 0.0,
+                "accrued_interest": 0.0,
+                "_yield_num": 0.0,
+                "_price_num": 0.0,
+            },
         )
+        mv = _flt(s.estimated_market_value) or 0.0
+        p["market_value"] += mv
+        p["cost_basis"] += _flt(s.total_cost_basis) or 0.0
+        p["quantity"] += _flt(s.quantity) or 0.0
+        p["dividends_paid"] += _flt(s.dividends_paid) or 0.0
+        p["accrued_interest"] += _flt(s.accrued_interest) or 0.0
+        p["_yield_num"] += (_flt(s.current_yield) or 0.0) * mv       # pond. por valor
+        p["_price_num"] += (_flt(s.market_price) or 0.0) * mv
+
+    points = []
+    for p in by_month.values():
+        mv = p["market_value"]
+        p["current_yield"] = (p.pop("_yield_num") / mv) if mv else None
+        p["market_price"] = (p.pop("_price_num") / mv) if mv else None
+        p["unrealized_gain_loss"] = mv - p["cost_basis"]
+        points.append(p)
     points.sort(key=lambda p: (p["year"], p["month_index"]))
     return {
         "identifier": inst.identifier,

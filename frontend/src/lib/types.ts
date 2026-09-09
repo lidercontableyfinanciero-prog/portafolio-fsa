@@ -95,6 +95,25 @@ export interface DashboardPayload {
   applied_filters: Record<string, string | null>;
 }
 
+export interface HistoricalPeriod {
+  year: number;
+  month: string;
+  month_index: number;
+  label: string;
+}
+
+export interface HistoricalRow {
+  key: string;
+  label: string;
+  kind: "money" | "pct";
+  values: (number | null)[];
+}
+
+export interface HistoricalMatrix {
+  periods: HistoricalPeriod[];
+  rows: HistoricalRow[];
+}
+
 export interface EvolutionPoint {
   year: number;
   month: string;

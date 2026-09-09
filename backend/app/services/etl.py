@@ -96,6 +96,31 @@ def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", str(text)).strip().lower().translate(_ACCENTS)
 
 
+# --- Normalización de identificadores (CUSIP/CINS) ---
+# El extracto no es consistente entre meses: unos traen "02209SAM5", otros
+# "02209SAM5 (CUSIP)", y hay erratas OCR en el dígito de control ("...RBCO"
+# en vez de "...RBC0"). Sin normalizar, la misma posición se fragmenta en
+# varios instrumentos y se pierde su histórico.
+_ID_ANNOTATION = re.compile(
+    r"\s*\(\s*(?:cusip|cins)(?:\s*/\s*(?:cusip|cins))?\s*\)\s*$", re.I
+)
+_ID_SHAPE = re.compile(r"^[A-Za-z0-9]{7,10}$")
+# El dígito de control (última posición) de un CUSIP/CINS es SIEMPRE numérico.
+_DIGIT_LOOKALIKE = {"O": "0", "I": "1", "L": "1"}
+
+
+def canonical_identifier(raw) -> str:
+    """CUSIP/CINS estable: quita el sufijo "(CUSIP)/(CINS)" y corrige la errata
+    O/I/L por 0/1/1 en el dígito de control. Deja intactos los ids sintéticos."""
+    s = _ID_ANNOTATION.sub("", str(raw)).strip()
+    compact = s.replace(" ", "")
+    if _ID_SHAPE.match(compact):
+        s = compact.upper()
+        if s and s[-1] in _DIGIT_LOOKALIKE:
+            s = s[:-1] + _DIGIT_LOOKALIKE[s[-1]]
+    return s
+
+
 def map_headers(columns: list[str]) -> dict[str, str]:
     """{nombre_columna_original: campo_canónico}. Cada campo se asigna una sola vez."""
     mapping: dict[str, str] = {}
@@ -284,6 +309,8 @@ def parse_upload(content: bytes, filename: str) -> EtlResult:
         # Identificador: los extractos traen CUSIP/CINS salvo en Efectivo
         # (Money Accounts / Cash), que se agrega en una sola línea por mes.
         identifier = rec.get("identifier")
+        if not _is_blank(identifier):
+            identifier = canonical_identifier(identifier)
         if _is_blank(identifier):
             desc = rec.get("description")
             cls = rec.get("classification")
