@@ -1,5 +1,8 @@
-# Render Blueprint — despliega BD + API + SPA de una sola vez.
+# Render Blueprint — arquitectura híbrida.
+#   Render  -> PostgreSQL + API (FastAPI)
+#   Vercel  -> Front-End (Next.js)  [ver frontend/vercel.json]
 # Docs: https://render.com/docs/blueprint-spec
+
 databases:
   - name: portafolio-fsa-db
     databaseName: portafolio_fsa
@@ -16,40 +19,23 @@ services:
     dockerContext: ./backend
     plan: free
     healthCheckPath: /health
+    autoDeploy: true
     envVars:
       - key: DATABASE_URL
         fromDatabase:
           name: portafolio-fsa-db
-          property: connectionString
+          property: connectionString      # Render entrega postgresql://...
+                                          # config.py lo normaliza a postgresql+psycopg://
       - key: SECRET_KEY
-        generateValue: true
+        generateValue: true               # Render genera un valor aleatorio seguro
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: "480"
+      - key: DEBUG
+        value: "false"
       - key: BACKEND_CORS_ORIGINS
-        # Ajustar al dominio real del frontend tras el primer deploy
-        value: '["https://portafolio-fsa-web.onrender.com"]'
+        # ⚠️ Sustituir por la URL real del frontend en Vercel tras el 1er deploy.
+        value: '["https://portafolio-fsa.vercel.app"]'
       - key: RUN_SEED
         value: "0"
       - key: WEB_CONCURRENCY
         value: "2"
-
-  # --- Frontend (Next.js standalone) ---
-  - type: web
-    name: portafolio-fsa-web
-    runtime: docker
-    dockerfilePath: ./frontend/Dockerfile
-    dockerContext: ./frontend
-    plan: free
-    envVars:
-      - key: NEXT_PUBLIC_API_URL
-        # URL pública de la API (para los rewrites server-side de Next)
-        value: https://portafolio-fsa-api.onrender.com
-      - key: NODE_ENV
-        value: production
-
-# Notas:
-# - `DATABASE_URL` de Render viene como postgres://…  El backend usa
-#   psycopg v3; añade el sufijo +psycopg si tu plataforma no lo hace:
-#   postgresql+psycopg://…  (config.py acepta ambos si se ajusta; ver docs/DEPLOY.md).
-# - Render inyecta connectionString como postgresql://  -> en DEPLOY.md se
-#   explica cómo forzar el driver psycopg.
