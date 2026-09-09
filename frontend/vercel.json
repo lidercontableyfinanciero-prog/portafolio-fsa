@@ -2,11 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "buildCommand": "next build",
-  "installCommand": "npm ci",
-  "build": {
-    "env": {
-      "NEXT_PUBLIC_API_URL": "@portafolio_fsa_api_url"
-    }
-  },
-  "comment": "El frontend hace proxy de /api/* al backend mediante rewrites en next.config.mjs (usa NEXT_PUBLIC_API_URL). Configura NEXT_PUBLIC_API_URL en Vercel apuntando a la URL pública de la API FastAPI."
+  "installCommand": "npm ci"
 }
