@@ -89,28 +89,56 @@ class DashboardPayload:
 
 
 # --------------------------------------------------------------------------- #
-# Filtros — Moody's y S&P se consultan de forma independiente y simultánea
+# Filtros — cada dimensión admite selección múltiple (OR interno, AND entre
+# dimensiones). Moody's y S&P se consultan de forma independiente.
 # --------------------------------------------------------------------------- #
+def _as_set(v) -> set[str] | None:
+    if v is None:
+        return None
+    if isinstance(v, str):
+        return {v} if v else None
+    s = {x for x in v if x}
+    return s or None
+
+
 def filter_positions(
     positions: Iterable[PositionMetrics],
     *,
-    type_: str | None = None,
-    classification: str | None = None,
-    sector: str | None = None,
-    moodys_grade: str | None = None,   # "Grado de Inversión" / "Grado Especulativo"
-    sp_grade: str | None = None,
+    type_=None,
+    classification=None,
+    sector=None,
+    moodys_grade=None,      # "Grado de Inversión" / "Grado Especulativo"
+    sp_grade=None,
+    stop_loss=None,
+    time_alert=None,
+    issuer_alert=None,
 ) -> list[PositionMetrics]:
+    types = _as_set(type_)
+    classes = _as_set(classification)
+    sectors = _as_set(sector)
+    moodys = _as_set(moodys_grade)
+    sps = _as_set(sp_grade)
+    stops = _as_set(stop_loss)
+    times = _as_set(time_alert)
+    issuers = _as_set(issuer_alert)
+
     out = []
     for p in positions:
-        if type_ and (p.type or "") != type_:
+        if types and (p.type or "") not in types:
             continue
-        if classification and (p.classification or "") != classification:
+        if classes and (p.classification or "") not in classes:
             continue
-        if sector and (p.sector or "") != sector:
+        if sectors and (p.sector or "") not in sectors:
             continue
-        if moodys_grade and p.moodys_grade != moodys_grade:
+        if moodys and p.moodys_grade not in moodys:
             continue
-        if sp_grade and p.sp_grade != sp_grade:
+        if sps and p.sp_grade not in sps:
+            continue
+        if stops and p.stop_loss not in stops:
+            continue
+        if times and p.time_alert not in times:
+            continue
+        if issuers and p.issuer_alert not in issuers:
             continue
         out.append(p)
     return out

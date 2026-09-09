@@ -17,7 +17,8 @@ _SORTABLE = {
     "description", "identifier", "classification", "type", "sector", "market_value",
     "cost_basis", "unrealized_gain_loss", "return_on_cost", "annual_income",
     "current_yield", "dividends_paid", "tax", "tax_rate", "equity_return_on_cost",
-    "equity_market_value_return", "stop_loss", "moodys_grade", "sp_grade",
+    "equity_market_value_return", "stop_loss", "time_alert", "issuer_alert",
+    "moodys_grade", "sp_grade",
 }
 
 
@@ -26,11 +27,14 @@ def list_positions(
     db: Session = Depends(get_db),
     year: int | None = None,
     month: str | None = None,
-    type: str | None = Query(None),
-    classification: str | None = None,
-    sector: str | None = None,
-    moodys_grade: str | None = None,
-    sp_grade: str | None = None,
+    type: list[str] | None = Query(None),
+    classification: list[str] | None = Query(None),
+    sector: list[str] | None = Query(None),
+    moodys_grade: list[str] | None = Query(None),
+    sp_grade: list[str] | None = Query(None),
+    stop_loss: list[str] | None = Query(None),
+    time_alert: list[str] | None = Query(None),
+    issuer_alert: list[str] | None = Query(None),
     search: str | None = None,
     sort_by: str = "market_value",
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
@@ -52,6 +56,9 @@ def list_positions(
         sector=sector,
         moodys_grade=moodys_grade,
         sp_grade=sp_grade,
+        stop_loss=stop_loss,
+        time_alert=time_alert,
+        issuer_alert=issuer_alert,
     )
     if search:
         s = search.lower()

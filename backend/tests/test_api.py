@@ -289,6 +289,40 @@ def test_equity_reconciled_across_months(client, admin_token):
     assert {"Julio", "Agosto"} <= months
 
 
+def test_positions_multiselect_filters(client, admin_token):
+    base = "/api/positions?year=2026&month=Agosto&page_size=500"
+    all_rows = client.get(base, headers=auth(admin_token)).json()["items"]
+    n_bond = sum(1 for r in all_rows if r["type"] == "Bond")
+    n_eq = sum(1 for r in all_rows if r["type"] == "Equity")
+
+    # multiselect de tipo: Bond + Equity
+    multi = client.get(
+        f"{base}&type=Bond&type=Equity", headers=auth(admin_token)
+    ).json()
+    assert multi["total"] == n_bond + n_eq
+
+    # filtro por stop_loss (varios valores)
+    sl = client.get(
+        f"{base}&stop_loss=Evaluar Venta&stop_loss=Ejecutar Venta - Previa Revisión",
+        headers=auth(admin_token),
+    ).json()
+    assert all(
+        r["stop_loss"] in ("Evaluar Venta", "Ejecutar Venta - Previa Revisión")
+        for r in sl["items"]
+    )
+    assert sl["total"] == sum(
+        1
+        for r in all_rows
+        if r["stop_loss"] in ("Evaluar Venta", "Ejecutar Venta - Previa Revisión")
+    )
+
+    # alerta_tiempo + alerta_emisor
+    at = client.get(f"{base}&time_alert=Revisar", headers=auth(admin_token)).json()
+    assert all(r["time_alert"] == "Revisar" for r in at["items"])
+    ie = client.get(f"{base}&issuer_alert=OK", headers=auth(admin_token)).json()
+    assert all(r["issuer_alert"] == "OK" for r in ie["items"])
+
+
 def test_positions_new_columns(client, lector_token):
     r = client.get(
         "/api/positions?year=2026&month=Agosto&classification=Renta Variable&page_size=5",

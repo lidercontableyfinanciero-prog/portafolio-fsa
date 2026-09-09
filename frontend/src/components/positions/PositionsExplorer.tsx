@@ -15,6 +15,7 @@ import { PositionHistoryChart } from "@/components/positions/PositionHistoryChar
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { ExportMenu } from "@/components/ui/ExportMenu";
+import { MultiSelect } from "@/components/ui/MultiSelect";
 import { Select } from "@/components/ui/Select";
 import { EmptyState, ErrorState, Spinner } from "@/components/ui/States";
 import { fetcher } from "@/lib/api";
@@ -25,6 +26,13 @@ import type { PositionRow, PositionsResponse } from "@/lib/types";
 
 const col = createColumnHelper<PositionRow>();
 const GRADES = ["Grado de Inversión", "Grado Especulativo"];
+const STOP_LOSS_VALUES = [
+  "Inversión Estable / Pérdida tolerable",
+  "Monitoreo",
+  "Evaluar Venta",
+  "Ejecutar Venta - Previa Revisión",
+];
+const ALERT_VALUES = ["OK", "Revisar"];
 const PAGE_SIZE = 20;
 
 const SHORT_STOP_LOSS: Record<string, string> = {
@@ -34,76 +42,82 @@ const SHORT_STOP_LOSS: Record<string, string> = {
   "Ejecutar Venta - Previa Revisión": "Ejecutar venta",
 };
 
-interface LocalFilters {
-  year: number | null;
-  month: string | null;
-  type: string;
-  classification: string;
-  sector: string;
-  moodysGrade: string;
-  spGrade: string;
-  search: string;
-}
+type MultiKey =
+  | "types"
+  | "classifications"
+  | "sectors"
+  | "moodysGrades"
+  | "spGrades"
+  | "stopLosses"
+  | "timeAlerts"
+  | "issuerAlerts";
+
+const EMPTY_MULTI: Record<MultiKey, string[]> = {
+  types: [],
+  classifications: [],
+  sectors: [],
+  moodysGrades: [],
+  spGrades: [],
+  stopLosses: [],
+  timeAlerts: [],
+  issuerAlerts: [],
+};
 
 const money = { meta: { num: true } } as const;
+
+const alertColor = (v: string) => (v === "OK" ? FSA.green : FSA.orange);
 
 export function PositionsExplorer() {
   const { periods, options } = useFilters();
   const latest = periods[periods.length - 1];
 
-  const [f, setF] = useState<LocalFilters>({
-    year: null,
-    month: null,
-    type: "",
-    classification: "",
-    sector: "",
-    moodysGrade: "",
-    spGrade: "",
-    search: "",
-  });
+  const [year, setYear] = useState<number | null>(null);
+  const [month, setMonth] = useState<string | null>(null);
+  const [multi, setMulti] = useState<Record<MultiKey, string[]>>(EMPTY_MULTI);
+  const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("market_value");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const year = f.year ?? latest?.year ?? null;
-  const month = f.month ?? latest?.month ?? null;
+  const effYear = year ?? latest?.year ?? null;
+  const effMonth = month ?? latest?.month ?? null;
 
-  function set<K extends keyof LocalFilters>(k: K, v: LocalFilters[K]) {
-    setF((s) => ({ ...s, [k]: v }));
+  function setM(k: MultiKey, v: string[]) {
+    setMulti((s) => ({ ...s, [k]: v }));
     setPage(1);
     setExpanded(null);
   }
 
   const params = new URLSearchParams();
-  if (year) params.set("year", String(year));
-  if (month) params.set("month", month);
-  if (f.type) params.set("type", f.type);
-  if (f.classification) params.set("classification", f.classification);
-  if (f.sector) params.set("sector", f.sector);
-  if (f.moodysGrade) params.set("moodys_grade", f.moodysGrade);
-  if (f.spGrade) params.set("sp_grade", f.spGrade);
+  if (effYear) params.set("year", String(effYear));
+  if (effMonth) params.set("month", effMonth);
+  const P: [MultiKey, string][] = [
+    ["types", "type"],
+    ["classifications", "classification"],
+    ["sectors", "sector"],
+    ["moodysGrades", "moodys_grade"],
+    ["spGrades", "sp_grade"],
+    ["stopLosses", "stop_loss"],
+    ["timeAlerts", "time_alert"],
+    ["issuerAlerts", "issuer_alert"],
+  ];
+  for (const [k, qp] of P) for (const v of multi[k]) params.append(qp, v);
   const exportQuery = params.toString();
 
   const key =
-    year && month
+    effYear && effMonth
       ? `/positions?${exportQuery}&sort_by=${sortBy}&sort_dir=${sortDir}` +
         `&page=${page}&page_size=${PAGE_SIZE}` +
-        (f.search ? `&search=${encodeURIComponent(f.search)}` : "")
+        (search ? `&search=${encodeURIComponent(search)}` : "")
       : null;
 
   const { data, error, isLoading } = useSWR<PositionsResponse>(key, fetcher, {
     keepPreviousData: true,
   });
 
-  const activeCount = [
-    f.type,
-    f.classification,
-    f.sector,
-    f.moodysGrade,
-    f.spGrade,
-    f.search,
-  ].filter(Boolean).length;
+  const activeCount =
+    P.reduce((n, [k]) => n + (multi[k].length ? 1 : 0), 0) + (search ? 1 : 0);
 
   const columns = useMemo(
     () => [
@@ -160,35 +174,31 @@ export function PositionsExplorer() {
       }),
       col.accessor("equity_return_on_cost", {
         header: "Rentab. Costo (RV)",
-        cell: (c) => (c.row.original.classification === "Renta Variable" ? fmtPct(c.getValue()) : "—"),
+        cell: (c) =>
+          c.row.original.classification === "Renta Variable" ? fmtPct(c.getValue()) : "—",
         ...money,
       }),
       col.accessor("equity_market_value_return", {
         header: "Rentab. V. Mercado (RV)",
-        cell: (c) => (c.row.original.classification === "Renta Variable" ? fmtPct(c.getValue()) : "—"),
+        cell: (c) =>
+          c.row.original.classification === "Renta Variable" ? fmtPct(c.getValue()) : "—",
         ...money,
       }),
       col.accessor("moodys_rating", {
         header: "Moody's",
-        cell: (c) => (
-          <span className="flex items-center gap-1.5">
-            <span className="tnum">{c.getValue() ?? "—"}</span>
-            <Badge color={gradeColor(c.row.original.moodys_grade)}>
-              {c.row.original.moodys_grade.includes("Inversión") ? "IG" : "Esp."}
-            </Badge>
-          </span>
-        ),
+        cell: (c) => <span className="tnum">{c.getValue() ?? "—"}</span>,
+      }),
+      col.accessor("moodys_grade", {
+        header: "KPI Riesgo Moody's",
+        cell: (c) => <Badge color={gradeColor(c.getValue())}>{c.getValue()}</Badge>,
       }),
       col.accessor("sp_rating", {
         header: "S&P",
-        cell: (c) => (
-          <span className="flex items-center gap-1.5">
-            <span className="tnum">{c.getValue() ?? "—"}</span>
-            <Badge color={gradeColor(c.row.original.sp_grade)}>
-              {c.row.original.sp_grade.includes("Inversión") ? "IG" : "Esp."}
-            </Badge>
-          </span>
-        ),
+        cell: (c) => <span className="tnum">{c.getValue() ?? "—"}</span>,
+      }),
+      col.accessor("sp_grade", {
+        header: "KPI Riesgo S&P",
+        cell: (c) => <Badge color={gradeColor(c.getValue())}>{c.getValue()}</Badge>,
       }),
       col.accessor("stop_loss", {
         header: "Stop-Loss",
@@ -200,6 +210,14 @@ export function PositionsExplorer() {
           </span>
         ),
       }),
+      col.accessor("time_alert", {
+        header: "Alerta Tiempo",
+        cell: (c) => <Badge color={alertColor(c.getValue())}>{c.getValue()}</Badge>,
+      }),
+      col.accessor("issuer_alert", {
+        header: "Alerta Emisor",
+        cell: (c) => <Badge color={alertColor(c.getValue())}>{c.getValue()}</Badge>,
+      }),
     ],
     [],
   );
@@ -208,7 +226,7 @@ export function PositionsExplorer() {
     "description", "identifier", "type", "sector", "cost_basis", "market_value",
     "unrealized_gain_loss", "return_on_cost", "current_yield", "dividends_paid",
     "tax", "tax_rate", "equity_return_on_cost", "equity_market_value_return",
-    "moodys_grade", "sp_grade", "stop_loss",
+    "moodys_grade", "sp_grade", "stop_loss", "time_alert", "issuer_alert",
   ]);
   const SORT_KEY: Record<string, string> = {
     moodys_rating: "moodys_grade",
@@ -239,83 +257,113 @@ export function PositionsExplorer() {
 
   return (
     <div className="space-y-3">
-      {/* Filtros inteligentes */}
-      <Card className="flex flex-wrap items-end gap-3">
-        <Select
-          label="Año"
-          value={year ? String(year) : ""}
-          onChange={(v) => set("year", Number(v))}
-          options={[...new Set(periods.map((p) => p.year))].map((y) => ({
-            value: String(y),
-            label: String(y),
-          }))}
-        />
-        <Select
-          label="Mes"
-          value={month ?? ""}
-          onChange={(v) => set("month", v)}
-          options={periods.filter((p) => p.year === year).map((p) => p.month)}
-        />
-        <Select
-          label="Tipo de activo"
-          value={f.type}
-          onChange={(v) => set("type", v)}
-          options={options?.types ?? []}
-          allowEmpty
-        />
-        <Select
-          label="Clasificación"
-          value={f.classification}
-          onChange={(v) => set("classification", v)}
-          options={options?.classifications ?? []}
-          allowEmpty
-        />
-        <Select
-          label="Sector"
-          value={f.sector}
-          onChange={(v) => set("sector", v)}
-          options={options?.sectors ?? []}
-          allowEmpty
-        />
-        <Select
-          label="Calificación Moody's"
-          value={f.moodysGrade}
-          onChange={(v) => set("moodysGrade", v)}
-          options={GRADES}
-          allowEmpty
-        />
-        <Select
-          label="Calificación S&P"
-          value={f.spGrade}
-          onChange={(v) => set("spGrade", v)}
-          options={GRADES}
-          allowEmpty
-        />
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-500 text-fsa-muted">Buscar</span>
-          <input
-            value={f.search}
-            onChange={(e) => set("search", e.target.value)}
-            placeholder="Descripción o CUSIP…"
-            className="h-10 w-56 rounded-lg border border-fsa-border px-3 text-sm outline-none focus:border-fsa-blue"
+      <Card className="space-y-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <Select
+            label="Año"
+            value={effYear ? String(effYear) : ""}
+            onChange={(v) => {
+              setYear(Number(v));
+              setPage(1);
+              setExpanded(null);
+            }}
+            options={[...new Set(periods.map((p) => p.year))].map((y) => ({
+              value: String(y),
+              label: String(y),
+            }))}
           />
-        </label>
-        <div className="ml-auto flex items-end gap-2">
-          {activeCount > 0 ? (
-            <button
-              onClick={() =>
-                setF({
-                  year: f.year, month: f.month, type: "", classification: "",
-                  sector: "", moodysGrade: "", spGrade: "", search: "",
-                })
-              }
-              className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-fsa-border bg-white px-3 text-sm text-fsa-muted hover:text-fsa-navy"
-            >
-              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-              Limpiar {activeCount}
-            </button>
-          ) : null}
-          <ExportMenu base="/export/positions" query={exportQuery} />
+          <Select
+            label="Mes"
+            value={effMonth ?? ""}
+            onChange={(v) => {
+              setMonth(v);
+              setPage(1);
+              setExpanded(null);
+            }}
+            options={periods.filter((p) => p.year === effYear).map((p) => p.month)}
+          />
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-500 text-fsa-muted">Buscar</span>
+            <input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Descripción o CUSIP…"
+              className="h-10 w-56 rounded-lg border border-fsa-border px-3 text-sm outline-none focus:border-fsa-blue"
+            />
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <MultiSelect
+            label="Tipo de activo"
+            values={multi.types}
+            onChange={(v) => setM("types", v)}
+            options={options?.types ?? []}
+          />
+          <MultiSelect
+            label="Clasificación"
+            values={multi.classifications}
+            onChange={(v) => setM("classifications", v)}
+            options={options?.classifications ?? []}
+          />
+          <MultiSelect
+            label="Sector"
+            values={multi.sectors}
+            onChange={(v) => setM("sectors", v)}
+            options={options?.sectors ?? []}
+          />
+          <MultiSelect
+            label="KPI Riesgo Moody's"
+            values={multi.moodysGrades}
+            onChange={(v) => setM("moodysGrades", v)}
+            options={GRADES}
+          />
+          <MultiSelect
+            label="KPI Riesgo S&P"
+            values={multi.spGrades}
+            onChange={(v) => setM("spGrades", v)}
+            options={GRADES}
+          />
+          <MultiSelect
+            label="Stop-Loss"
+            values={multi.stopLosses}
+            onChange={(v) => setM("stopLosses", v)}
+            options={STOP_LOSS_VALUES.map((s) => ({
+              value: s,
+              label: SHORT_STOP_LOSS[s] ?? s,
+            }))}
+          />
+          <MultiSelect
+            label="Alerta Tiempo"
+            values={multi.timeAlerts}
+            onChange={(v) => setM("timeAlerts", v)}
+            options={ALERT_VALUES}
+          />
+          <MultiSelect
+            label="Alerta Emisor"
+            values={multi.issuerAlerts}
+            onChange={(v) => setM("issuerAlerts", v)}
+            options={ALERT_VALUES}
+          />
+          <div className="ml-auto flex items-end gap-2">
+            {activeCount > 0 ? (
+              <button
+                onClick={() => {
+                  setMulti(EMPTY_MULTI);
+                  setSearch("");
+                  setPage(1);
+                }}
+                className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-fsa-border bg-white px-3 text-sm text-fsa-muted hover:text-fsa-navy"
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                Limpiar {activeCount}
+              </button>
+            ) : null}
+            <ExportMenu base="/export/positions" query={exportQuery} />
+          </div>
         </div>
       </Card>
 
@@ -344,12 +392,12 @@ export function PositionsExplorer() {
           <div className="overflow-x-auto scroll-thin">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-fsa-border text-left text-xs text-fsa-muted">
+                <tr className="border-b border-fsa-border text-left text-xs font-500 text-fsa-muted">
                   {table.getFlatHeaders().map((h) => {
                     const id = h.column.id;
-                    const sortable = SORTABLE.has(SORT_KEY[id] ?? id);
-                    const num = (h.column.columnDef.meta as { num?: boolean })?.num;
                     const activeKey = SORT_KEY[id] ?? id;
+                    const sortable = SORTABLE.has(activeKey);
+                    const num = (h.column.columnDef.meta as { num?: boolean })?.num;
                     return (
                       <th
                         key={h.id}

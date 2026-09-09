@@ -29,18 +29,9 @@ def _resolve(db: Session, year: int | None, month: str | None):
     return latest.year, latest.month
 
 
-def _filtered_metrics(
-    db, year, month, type_, classification, sector, moodys_grade, sp_grade, as_of
-):
+def _filtered_metrics(db, year, month, as_of, **flt):
     metrics = repo.load_metrics(db, year, month, as_of=as_of)
-    return filter_positions(
-        metrics,
-        type_=type_,
-        classification=classification,
-        sector=sector,
-        moodys_grade=moodys_grade,
-        sp_grade=sp_grade,
-    )
+    return filter_positions(metrics, **flt)
 
 
 def _twr_dict(db: Session, year: int | None = None) -> dict:
@@ -71,25 +62,43 @@ def _common_params(
     db: Session = Depends(get_db),
     year: int | None = None,
     month: str | None = None,
-    type: str | None = Query(None),
-    classification: str | None = None,
-    sector: str | None = None,
-    moodys_grade: str | None = None,
-    sp_grade: str | None = None,
+    type: list[str] | None = Query(None),
+    classification: list[str] | None = Query(None),
+    sector: list[str] | None = Query(None),
+    moodys_grade: list[str] | None = Query(None),
+    sp_grade: list[str] | None = Query(None),
+    stop_loss: list[str] | None = Query(None),
+    time_alert: list[str] | None = Query(None),
+    issuer_alert: list[str] | None = Query(None),
     as_of: date | None = None,
 ):
     y, m = _resolve(db, year, month)
-    metrics = _filtered_metrics(
-        db, y, m, type, classification, sector, moodys_grade, sp_grade, as_of
+    flt = dict(
+        type_=type,
+        classification=classification,
+        sector=sector,
+        moodys_grade=moodys_grade,
+        sp_grade=sp_grade,
+        stop_loss=stop_loss,
+        time_alert=time_alert,
+        issuer_alert=issuer_alert,
     )
+    metrics = _filtered_metrics(db, y, m, as_of, **flt)
+
+    def _fmt(v):
+        return ", ".join(v) if isinstance(v, list) else v
+
     meta = {
         "period": {"year": y, "month": m},
         "filters": {
-            "tipo": type,
-            "clasificación": classification,
-            "sector": sector,
-            "Moody's": moodys_grade,
-            "S&P": sp_grade,
+            "tipo": _fmt(type),
+            "clasificación": _fmt(classification),
+            "sector": _fmt(sector),
+            "Moody's": _fmt(moodys_grade),
+            "S&P": _fmt(sp_grade),
+            "stop-loss": _fmt(stop_loss),
+            "alerta tiempo": _fmt(time_alert),
+            "alerta emisor": _fmt(issuer_alert),
         },
     }
     return db, metrics, meta, y

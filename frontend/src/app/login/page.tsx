@@ -41,7 +41,7 @@ export default function LoginPage() {
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
       {/* Panel de marca */}
-      <div className="relative hidden overflow-hidden bg-fsa-navy px-14 py-16 text-white lg:flex lg:flex-col lg:justify-between">
+      <div className="relative hidden overflow-hidden bg-fsa-navy px-14 py-16 text-white lg:flex lg:flex-col lg:items-center lg:justify-center lg:text-center">
         <div
           aria-hidden
           className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-fsa-teal/20 blur-3xl"
@@ -50,32 +50,42 @@ export default function LoginPage() {
           aria-hidden
           className="pointer-events-none absolute -bottom-32 -left-16 h-96 w-96 rounded-full bg-fsa-magenta/15 blur-3xl"
         />
-        <motion.div {...rise} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}>
-          <span className="grid h-14 w-14 place-items-center rounded-xl bg-white">
+
+        <motion.div
+          {...rise}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className="relative flex flex-col items-center"
+        >
+          <span className="grid place-items-center rounded-3xl bg-white p-8 shadow-2xl shadow-black/30 sm:p-10">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-fsa.png" alt="Fundación San Antonio" width={40} height={33} />
+            <img
+              src="/logo-fsa.png"
+              alt="Fundación San Antonio"
+              width={260}
+              height={213}
+              className="w-[min(60vw,280px)]"
+            />
           </span>
         </motion.div>
 
         <motion.div
           {...rise}
-          transition={{ duration: 0.6, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
-          className="relative max-w-md"
+          transition={{ duration: 0.6, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+          className="relative mt-10 max-w-md"
         >
-          <p className="font-display text-[28px] font-600 leading-tight">
+          <p className="font-display text-[26px] font-600 leading-tight">
             Transformamos vidas a través del amor, la educación y las oportunidades.
           </p>
           <p className="mt-4 text-sm leading-relaxed text-white/60">
             Plataforma de gestión y análisis del portafolio de inversiones
-            internacionales. Valoración mark-to-market, rentabilidad TWR, escenarios de
-            venta y control de riesgo.
+            internacionales.
           </p>
         </motion.div>
 
         <motion.p
           {...rise}
-          transition={{ duration: 0.5, delay: 0.16 }}
-          className="relative text-xs text-white/40"
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="relative mt-10 text-xs text-white/40"
         >
           Una obra de la Arquidiócesis de Bogotá
         </motion.p>
