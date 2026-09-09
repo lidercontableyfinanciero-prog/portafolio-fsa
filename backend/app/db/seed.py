@@ -118,6 +118,21 @@ def _seed_benchmarks(db) -> None:
     print(f"  benchmarks: {len(periods)} meses (tasas anuales por defecto, editables)")
 
 
+def init_db() -> None:
+    """Arranque en producción: garantiza el esquema y los usuarios/parametros base.
+
+    Idempotente y tolerante a fallos: se invoca en cada arranque del backend
+    (ver `app.main.lifespan`). Crea `admin@fundacionsanantonio.org` si no existe.
+    NO carga los Excel de `Referencias/` (eso se hace desde la app, en Importar).
+    """
+    print("init_db: verificando esquema y usuarios base…")
+    Base.metadata.create_all(bind=engine, checkfirst=True)
+    with SessionLocal() as db:
+        _seed_users(db)
+        _seed_parameters(db)
+    print("init_db: listo.")
+
+
 def main() -> None:
     print("Sembrando base de datos…")
     Base.metadata.create_all(bind=engine, checkfirst=True)
