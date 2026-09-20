@@ -111,12 +111,47 @@ def evolution(db: Session = Depends(get_db)):
 
 
 @router.get("/historical")
-def historical(db: Session = Depends(get_db)):
-    """Análisis horizontal: métricas en filas, meses en columnas (consecutivas)."""
+def historical(
+    db: Session = Depends(get_db),
+    type: list[str] | None = Query(None),
+    classification: list[str] | None = Query(None),
+):
+    """Análisis horizontal: métricas en filas, meses en columnas (consecutivas).
+
+    `type`/`classification` filtran las filas de composición (Valor de
+    Mercado, Costo, G/(P), Rentabilidad s/ Costo) a un subconjunto de
+    posiciones. Las filas de Rentabilidad Dietz/TWR y variación siguen
+    siendo del portafolio completo: son series ya precalculadas a nivel
+    portafolio y no se pueden descomponer sin reasignar los flujos de caja
+    por subconjunto.
+    """
     from app.models.monthly_return import MonthlyReturn
     from app.services.twr import MonthlyReturnInput, time_weighted_return
 
+    has_filter = bool(type or classification)
     series = repo.monthly_portfolio_values(db)  # ya viene ordenado cronológicamente
+    if has_filter:
+        # Recalcula los agregados de cada período sobre el subconjunto filtrado.
+        filtered_series = []
+        for b in series:
+            metrics = repo.load_metrics(db, b["year"], b["month"])
+            rows_f = filter_positions(metrics, type_=type, classification=classification)
+            costo = sum(p.cost_basis for p in rows_f)
+            valor_mercado = sum(p.market_value for p in rows_f)
+            valor_informe = sum(p.valor_informe for p in rows_f)
+            gp = sum(p.unrealized_gain_loss for p in rows_f)
+            filtered_series.append(
+                {
+                    **b,
+                    "costo": costo,
+                    "valor_mercado": valor_mercado,
+                    "valor_informe": valor_informe,
+                    "gp_no_realizada": gp,
+                    "rentab_sobre_costo": (gp / costo) if costo else 0.0,
+                }
+            )
+        series = filtered_series
+
     periods = [
         {
             "year": b["year"],

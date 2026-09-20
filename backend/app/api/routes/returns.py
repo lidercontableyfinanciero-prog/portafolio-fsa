@@ -73,6 +73,7 @@ def twr(db: Session = Depends(get_db), year: int | None = None):
         "rows": [asdict(x) for x in result.rows],
         "cumulative_twr": result.cumulative_twr,
         "cumulative_benchmark": result.cumulative_benchmark,
+        "cumulative_alpha": result.cumulative_alpha,
     }
 
 

@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { FSA } from "@/lib/colors";
@@ -22,6 +22,16 @@ export function HeroBand({
   const total = variation?.valor_actual ?? evolution.at(-1)?.valor_informe ?? 0;
   const up = (variation?.variacion_abs ?? 0) >= 0;
   const spark = evolution.map((p) => ({ label: p.label, v: p.valor_informe }));
+
+  // Sin un dominio propio, Recharts arranca el eje Y en 0 por defecto: con
+  // valores de portafolio en el orden de los $10M, una variación mensual de
+  // unos cientos de miles queda invisible (línea casi plana). Se calcula un
+  // rango ajustado a los propios datos para que el vaivén mes a mes se note.
+  const sparkValues = spark.map((p) => p.v).filter((v) => Number.isFinite(v));
+  const sparkMin = sparkValues.length ? Math.min(...sparkValues) : 0;
+  const sparkMax = sparkValues.length ? Math.max(...sparkValues) : 0;
+  const sparkPad = Math.max((sparkMax - sparkMin) * 0.15, sparkMax * 0.01, 1);
+  const sparkDomain: [number, number] = [sparkMin - sparkPad, sparkMax + sparkPad];
 
   return (
     <motion.section
@@ -71,6 +81,7 @@ export function HeroBand({
               </linearGradient>
             </defs>
             <XAxis dataKey="label" hide />
+            <YAxis domain={sparkDomain} hide />
             <Tooltip
               contentStyle={{ borderRadius: 8, border: `1px solid ${FSA.border}`, fontSize: 12 }}
               formatter={(v: number) => [fmtUSD(v), "Valor Informe"]}

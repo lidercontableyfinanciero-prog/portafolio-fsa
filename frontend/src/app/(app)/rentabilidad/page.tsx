@@ -17,6 +17,7 @@ interface TwrResponse {
   rows: TwrRow[];
   cumulative_twr: number;
   cumulative_benchmark: number;
+  cumulative_alpha: number;
 }
 
 export default function RentabilidadPage() {
@@ -46,8 +47,8 @@ export default function RentabilidadPage() {
     { label: "Benchmark acumulado", value: fmtPct(data.cumulative_benchmark), tone: data.cumulative_benchmark },
     {
       label: "Alfa acumulado",
-      value: fmtPct(data.cumulative_twr - data.cumulative_benchmark),
-      tone: data.cumulative_twr - data.cumulative_benchmark,
+      value: fmtPct(data.cumulative_alpha),
+      tone: data.cumulative_alpha,
     },
   ];
 

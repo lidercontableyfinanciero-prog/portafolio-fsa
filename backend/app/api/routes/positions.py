@@ -64,6 +64,22 @@ def list_positions(
         s = search.lower()
         rows = [r for r in rows if s in r.description.lower() or s in r.identifier.lower()]
 
+    # Totales sobre TODO el conjunto filtrado (no solo la página visible),
+    # para el resumen fijo al pie de la tabla en Posiciones.
+    costo_total = sum(r.cost_basis for r in rows)
+    valor_mercado = sum(r.market_value for r in rows)
+    gp_no_realizada = sum(r.unrealized_gain_loss for r in rows)
+    totals = {
+        "n_posiciones": sum(1 for r in rows if r.market_value > 0),
+        "costo_total": costo_total,
+        "valor_mercado": valor_mercado,
+        "gp_no_realizada": gp_no_realizada,
+        "rentab_sobre_costo": (gp_no_realizada / costo_total) if costo_total else 0.0,
+        "ingreso_anual_est": sum(r.annual_income for r in rows),
+        "dividendos_pagados": sum(r.dividends_paid for r in rows),
+        "impuesto": sum(r.tax for r in rows),
+    }
+
     key = sort_by if sort_by in _SORTABLE else "market_value"
 
     def sort_key(r):
@@ -81,6 +97,7 @@ def list_positions(
         "page": page,
         "page_size": page_size,
         "items": [asdict(r) for r in page_rows],
+        "totals": totals,
     }
 
 

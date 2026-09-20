@@ -124,16 +124,19 @@ def test_slicer_grades_independent(client, admin_token):
     k = r.json()["kpis"]
     assert k["n_posiciones"] == 23
     assert round(k["valor_mercado"], 2) == 5_584_137.35
-    # Moody's independiente: en el extracto INFORME muchos bonos traen "***"/"WR<",
-    # así que el grado de inversión Moody's es reducido (2 posiciones).
+    # Moody's independiente — DASHBOARD!Q8/R8: Grado de Inversión (Moody's) =
+    # 29 posiciones / 7.140.374,35. El extracto trae la calificación en
+    # MAYÚSCULAS ("BAA2"); `moodys_grade()` debe normalizar antes de comparar
+    # contra el catálogo oficial (Baa2…) o casi todo cae a "Especulativo".
     r2 = client.get(
         "/api/portfolio/dashboard",
         params={"year": 2026, "month": "Agosto", "moodys_grade": "Grado de Inversión"},
         headers=auth(admin_token),
     )
-    m_inv = r2.json()["kpis"]["n_posiciones"]
-    assert m_inv == 2
-    # ambos a la vez: Moody's IG (2) ∩ S&P IG (23) -> como mucho 2
+    m = r2.json()["kpis"]
+    assert m["n_posiciones"] == 29
+    assert round(m["valor_mercado"], 2) == 7_140_374.35
+    # ambos a la vez: Moody's IG (29) ∩ S&P IG (23) -> 22
     r3 = client.get(
         "/api/portfolio/dashboard",
         params={
@@ -142,7 +145,7 @@ def test_slicer_grades_independent(client, admin_token):
         },
         headers=auth(admin_token),
     )
-    assert 0 <= r3.json()["kpis"]["n_posiciones"] <= 2
+    assert r3.json()["kpis"]["n_posiciones"] == 22
 
 
 def test_periods_and_evolution(client, admin_token):

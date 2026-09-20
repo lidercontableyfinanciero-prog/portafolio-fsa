@@ -390,11 +390,50 @@ def delete_snapshots_for_periods(db: Session, periods: list[tuple[int, str]]) ->
     return res.rowcount or 0
 
 
+# Tasas anuales de referencia por defecto (editables vía PUT /api/data/benchmarks).
+DEFAULT_BENCHMARK_COMPOSITE_ANNUAL = 0.06793
+DEFAULT_BENCHMARK_INSTITUTIONAL_ANNUAL = 0.082
+
+
+def ensure_default_benchmarks(db: Session) -> int:
+    """Crea una fila `Benchmark` con la tasa por defecto para cada período que
+    tenga datos de portafolio pero aún no tenga un benchmark configurado.
+
+    Sin esto, un período recién cargado (vía ETL o en un despliegue nuevo que
+    no pasó por `seed.main()`) se queda sin `benchmark_return` -> "Benchmark
+    Acumulado" y "Alfa Acumulado" aparecen vacíos/en cero. Es idempotente y
+    nunca sobrescribe una tasa ya cargada (manual o de seed).
+    """
+    periods = {(p.year, p.month_index) for p in list_periods(db)}
+    if not periods:
+        return 0
+    existing = {
+        (b.period_year, b.period_month) for b in db.execute(select(Benchmark)).scalars().all()
+    }
+    missing = sorted(periods - existing)
+    for year, month in missing:
+        db.add(
+            Benchmark(
+                period_year=year,
+                period_month=month,
+                composite_rate=DEFAULT_BENCHMARK_COMPOSITE_ANNUAL,
+                institutional_rate=DEFAULT_BENCHMARK_INSTITUTIONAL_ANNUAL,
+            )
+        )
+    if missing:
+        db.flush()
+    return len(missing)
+
+
 def recompute_monthly_returns(db: Session) -> int:
     """Dietz Modificado mes a mes a partir de la serie de valores y los flujos/benchmarks."""
     series = monthly_portfolio_values(db)
     if len(series) < 2:
         return 0
+
+    # Autocompleta benchmarks faltantes para que "Benchmark Acumulado" y
+    # "Alfa Acumulado" nunca queden deshabilitados por falta de seed.
+    ensure_default_benchmarks(db)
 
     flows = db.execute(select(CashFlow)).scalars().all()
     benchmarks = {

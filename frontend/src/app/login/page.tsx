@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { LoginShowcase } from "@/components/login/LoginShowcase";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/States";
 import { useAuth } from "@/lib/auth";
@@ -39,57 +40,8 @@ export default function LoginPage() {
     : { initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0 } };
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-      {/* Panel de marca */}
-      <div className="relative hidden overflow-hidden bg-fsa-navy px-14 py-16 text-white lg:flex lg:flex-col lg:items-center lg:justify-center lg:text-center">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-fsa-teal/20 blur-3xl"
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -bottom-32 -left-16 h-96 w-96 rounded-full bg-fsa-magenta/15 blur-3xl"
-        />
-
-        <motion.div
-          {...rise}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="relative flex flex-col items-center"
-        >
-          <span className="grid place-items-center rounded-3xl bg-white p-8 shadow-2xl shadow-black/30 sm:p-10">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo-fsa.png"
-              alt="Fundación San Antonio"
-              width={260}
-              height={213}
-              className="w-[min(60vw,280px)]"
-            />
-          </span>
-        </motion.div>
-
-        <motion.div
-          {...rise}
-          transition={{ duration: 0.6, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-          className="relative mt-10 max-w-md"
-        >
-          <p className="font-display text-[26px] font-600 leading-tight">
-            Transformamos vidas a través del amor, la educación y las oportunidades.
-          </p>
-          <p className="mt-4 text-sm leading-relaxed text-white/60">
-            Plataforma de gestión y análisis del portafolio de inversiones
-            internacionales.
-          </p>
-        </motion.div>
-
-        <motion.p
-          {...rise}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="relative mt-10 text-xs text-white/40"
-        >
-          Una obra de la Arquidiócesis de Bogotá
-        </motion.p>
-      </div>
+    <div className="grid min-h-screen lg:grid-cols-[1.15fr_1fr]">
+      <LoginShowcase />
 
       {/* Formulario */}
       <div className="grid place-items-center bg-fsa-bg px-6 py-12">

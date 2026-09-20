@@ -14,12 +14,10 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
 from app.db.rating_scale_data import PARAMETERS, RATING_SCALE
-from app.models.benchmark import Benchmark
 from app.models.parameter import Parameter, RatingScale
 from app.models.snapshot import PositionSnapshot
 from app.models.user import User, UserRole
 from app.services import portfolio_repo as repo
-from app.services.constants import month_name_to_index
 from app.services.etl import parse_upload
 from app.core.security import hash_password
 
@@ -101,21 +99,9 @@ def _seed_data_from_excel(db) -> None:
 
 
 def _seed_benchmarks(db) -> None:
-    if db.execute(select(Benchmark).limit(1)).first():
-        return
-    periods = {(s.statement_year, month_name_to_index(s.statement_month))
-               for s in db.execute(select(PositionSnapshot)).scalars()}
-    for year, month in sorted(p for p in periods if p[1]):
-        db.add(
-            Benchmark(
-                period_year=year,
-                period_month=month,
-                composite_rate=0.06793,
-                institutional_rate=0.082,
-            )
-        )
+    n = repo.ensure_default_benchmarks(db)
     db.commit()
-    print(f"  benchmarks: {len(periods)} meses (tasas anuales por defecto, editables)")
+    print(f"  benchmarks: {n} meses nuevos con tasa anual por defecto (editables)")
 
 
 def init_db() -> None:
@@ -130,6 +116,10 @@ def init_db() -> None:
     with SessionLocal() as db:
         _seed_users(db)
         _seed_parameters(db)
+        n = repo.ensure_default_benchmarks(db)
+        if n:
+            print(f"  benchmarks: {n} meses nuevos con tasa anual por defecto")
+        db.commit()
     print("init_db: listo.")
 
 

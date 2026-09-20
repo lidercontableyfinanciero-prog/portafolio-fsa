@@ -287,6 +287,8 @@ def parse_upload(content: bytes, filename: str) -> EtlResult:
 
     for idx, raw in df.iterrows():
         rec: dict = {}
+        row_num = int(idx) + 2  # +1 header, +1 base-1
+        bad_numeric: list[str] = []
         for col, target in header_map.items():
             val = raw[col]
             if target in _DATE_FIELDS:
@@ -295,6 +297,13 @@ def parse_upload(content: bytes, filename: str) -> EtlResult:
                 rec[target] = parse_percent(val)
             elif target in _NUMERIC_FIELDS:
                 rec[target] = parse_number(val)
+                # Una celda con texto no numérico (p. ej. "DEF") en una columna
+                # de importe queda en None y antes desaparecía en silencio,
+                # subestimando sumas como el Ingreso Anual Estimado sin dejar
+                # rastro. Se registra para que quede visible en el Historial
+                # de Cargas y el admin decida cómo corregirla en el origen.
+                if rec[target] is None and not _is_blank(val):
+                    bad_numeric.append(f"{target}={val!r}")
             elif target == "statement_year":
                 n = parse_number(val)
                 rec[target] = int(n) if n is not None else None
@@ -303,8 +312,6 @@ def parse_upload(content: bytes, filename: str) -> EtlResult:
                 rec[target] = month_index_to_name(int(float(s))) if s.replace(".", "").isdigit() else s
             else:
                 rec[target] = None if _is_blank(val) else str(val).strip()
-
-        row_num = int(idx) + 2  # +1 header, +1 base-1
 
         # Identificador: los extractos traen CUSIP/CINS salvo en Efectivo
         # (Money Accounts / Cash), que se agrega en una sola línea por mes.
@@ -348,6 +355,19 @@ def parse_upload(content: bytes, filename: str) -> EtlResult:
 
         mi = month_name_to_index(rec["statement_month"])
         snapshot["report_date"] = date(int(rec["statement_year"]), mi, 1)
+
+        if bad_numeric:
+            result.errors.append(
+                {
+                    "row": row_num,
+                    "identifier": identifier,
+                    "warning": True,
+                    "error": (
+                        "Valor no numérico en columna de importe (se guardó como vacío, "
+                        f"NO se sumó a los totales): {', '.join(bad_numeric)}."
+                    ),
+                }
+            )
 
         result.rows.append(ParsedRow(instrument=instrument, snapshot=snapshot))
 

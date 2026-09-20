@@ -30,6 +30,7 @@ class TwrRow:
     factor: float | None
     cumulative_twr: float | None
     cumulative_benchmark: float | None
+    cumulative_alpha: float | None = None
 
 
 @dataclass(slots=True)
@@ -37,6 +38,7 @@ class TwrResult:
     rows: list[TwrRow]
     cumulative_twr: float
     cumulative_benchmark: float
+    cumulative_alpha: float = 0.0
 
 
 def time_weighted_return(returns: list[MonthlyReturnInput]) -> TwrResult:
@@ -60,6 +62,8 @@ def time_weighted_return(returns: list[MonthlyReturnInput]) -> TwrResult:
             bench_factor *= 1.0 + br
             have_bench = True
 
+        cum_twr = (twr_factor - 1.0) if have_twr else None
+        cum_bench = (bench_factor - 1.0) if have_bench else None
         rows.append(
             TwrRow(
                 year=r.year,
@@ -68,13 +72,18 @@ def time_weighted_return(returns: list[MonthlyReturnInput]) -> TwrResult:
                 portfolio_return=pr,
                 benchmark_return=br,
                 factor=factor,
-                cumulative_twr=(twr_factor - 1.0) if have_twr else None,
-                cumulative_benchmark=(bench_factor - 1.0) if have_bench else None,
+                cumulative_twr=cum_twr,
+                cumulative_benchmark=cum_bench,
+                # Alfa Acumulado = TWR acumulado − Benchmark acumulado (docs/FINANCIAL_LOGIC.md §4).
+                cumulative_alpha=(cum_twr - cum_bench) if cum_twr is not None and cum_bench is not None else None,
             )
         )
 
+    final_twr = (twr_factor - 1.0) if have_twr else 0.0
+    final_bench = (bench_factor - 1.0) if have_bench else 0.0
     return TwrResult(
         rows=rows,
-        cumulative_twr=(twr_factor - 1.0) if have_twr else 0.0,
-        cumulative_benchmark=(bench_factor - 1.0) if have_bench else 0.0,
+        cumulative_twr=final_twr,
+        cumulative_benchmark=final_bench,
+        cumulative_alpha=final_twr - final_bench,
     )

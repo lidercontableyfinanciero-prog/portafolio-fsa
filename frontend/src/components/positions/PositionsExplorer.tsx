@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-table";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowDown, ArrowUp, ChevronsUpDown, RotateCcw } from "lucide-react";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, type ReactNode, useMemo, useState } from "react";
 import useSWR from "swr";
 
 import { PositionHistoryChart } from "@/components/positions/PositionHistoryChart";
@@ -22,7 +22,7 @@ import { fetcher } from "@/lib/api";
 import { FSA, gradeColor, stopLossColor } from "@/lib/colors";
 import { fmtPct, fmtUSD } from "@/lib/format";
 import { useFilters } from "@/lib/filters";
-import type { PositionRow, PositionsResponse } from "@/lib/types";
+import type { PositionRow, PositionsResponse, PositionsTotals } from "@/lib/types";
 
 const col = createColumnHelper<PositionRow>();
 const GRADES = ["Grado de Inversión", "Grado Especulativo"];
@@ -66,6 +66,31 @@ const EMPTY_MULTI: Record<MultiKey, string[]> = {
 const money = { meta: { num: true } } as const;
 
 const alertColor = (v: string) => (v === "OK" ? FSA.green : FSA.orange);
+
+/** Contenido de la fila de totales (pie de tabla) por columna, o `null` si esa
+ * columna no admite un total (texto, calificación, badge de alerta, etc.). */
+function footerCell(columnId: string, t: PositionsTotals): ReactNode {
+  switch (columnId) {
+    case "cost_basis":
+      return fmtUSD(t.costo_total);
+    case "market_value":
+      return fmtUSD(t.valor_mercado);
+    case "unrealized_gain_loss":
+      return (
+        <span style={{ color: t.gp_no_realizada >= 0 ? FSA.green : FSA.red }}>
+          {fmtUSD(t.gp_no_realizada)}
+        </span>
+      );
+    case "return_on_cost":
+      return fmtPct(t.rentab_sobre_costo);
+    case "dividends_paid":
+      return fmtUSD(t.dividendos_pagados);
+    case "tax":
+      return fmtUSD(t.impuesto);
+    default:
+      return null;
+  }
+}
 
 export function PositionsExplorer() {
   const { periods, options } = useFilters();
@@ -478,6 +503,23 @@ export function PositionsExplorer() {
                   );
                 })}
               </tbody>
+              {data?.totals ? (
+                <tfoot>
+                  <tr className="sticky bottom-0 border-t-2 border-fsa-navy/20 bg-fsa-surface-2 font-600 text-fsa-navy">
+                    {table.getVisibleFlatColumns().map((column, i) => {
+                      const content = footerCell(column.id, data.totals);
+                      return (
+                        <td
+                          key={column.id}
+                          className={`whitespace-nowrap py-2 px-2 ${content != null ? "tnum text-right" : ""}`}
+                        >
+                          {i === 0 ? `Totales · ${data.total} posiciones` : content}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </tfoot>
+              ) : null}
             </table>
           </div>
         )}

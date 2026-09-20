@@ -189,12 +189,24 @@ export interface PositionHistory {
   points: PositionHistoryPoint[];
 }
 
+export interface PositionsTotals {
+  n_posiciones: number;
+  costo_total: number;
+  valor_mercado: number;
+  gp_no_realizada: number;
+  rentab_sobre_costo: number;
+  ingreso_anual_est: number;
+  dividendos_pagados: number;
+  impuesto: number;
+}
+
 export interface PositionsResponse {
   period: { year: number; month: string };
   total: number;
   page: number;
   page_size: number;
   items: PositionRow[];
+  totals: PositionsTotals;
 }
 
 export interface ScenarioResult {
@@ -302,4 +314,5 @@ export interface TwrRow {
   factor: number | null;
   cumulative_twr: number | null;
   cumulative_benchmark: number | null;
+  cumulative_alpha: number | null;
 }

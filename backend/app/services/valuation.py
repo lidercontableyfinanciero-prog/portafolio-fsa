@@ -26,6 +26,10 @@ from app.services.constants import (
     STOP_LOSS_STABLE,
 )
 
+# Comparación insensible a mayúsculas/minúsculas (ver `moodys_grade`/`sp_grade`).
+MOODYS_INVESTMENT_GRADE_NORM = {c.upper() for c in MOODYS_INVESTMENT_GRADE}
+SP_INVESTMENT_GRADE_NORM = {c.upper() for c in SP_INVESTMENT_GRADE}
+
 
 def _f(x: float | int | None) -> float:
     return float(x) if x is not None else 0.0
@@ -51,11 +55,16 @@ def valor_informe(
 
 
 def moodys_grade(rating: str | None) -> str:
-    return GRADE_INVESTMENT if (rating or "").strip() in MOODYS_INVESTMENT_GRADE else GRADE_SPECULATIVE
+    """Columna AI. El extracto trae la calificación en MAYÚSCULAS ("BAA2"),
+    mientras que la notación oficial de Moody's usa minúsculas ("Baa2") — se
+    normaliza a mayúsculas en ambos lados para no perder coincidencias."""
+    r = (rating or "").strip().upper()
+    return GRADE_INVESTMENT if r in MOODYS_INVESTMENT_GRADE_NORM else GRADE_SPECULATIVE
 
 
 def sp_grade(rating: str | None) -> str:
-    return GRADE_INVESTMENT if (rating or "").strip() in SP_INVESTMENT_GRADE else GRADE_SPECULATIVE
+    r = (rating or "").strip().upper()
+    return GRADE_INVESTMENT if r in SP_INVESTMENT_GRADE_NORM else GRADE_SPECULATIVE
 
 
 def stop_loss_indicator(gain_loss: float, cost_basis: float | None) -> str:
