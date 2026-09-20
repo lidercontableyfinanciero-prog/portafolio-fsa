@@ -228,3 +228,58 @@ def historical(
          )},
     ]
     return {"periods": periods, "rows": rows}
+
+
+# Filas de `/historical` que son sumas directas de posiciones -> se pueden
+# desglosar por posición. Dietz/TWR/variación son series de portafolio y no.
+_HISTORICAL_POSITION_ATTR = {
+    "valor_mercado": "market_value",
+    "costo": "cost_basis",
+    "valor_informe": "valor_informe",
+    "gp_no_realizada": "unrealized_gain_loss",
+    "rentab_sobre_costo": "return_on_cost",
+}
+
+
+@router.get("/historical/positions")
+def historical_positions(
+    db: Session = Depends(get_db),
+    metric: str = Query(..., description="Clave de la fila de /historical a desglosar."),
+    type: list[str] | None = Query(None),
+    classification: list[str] | None = Query(None),
+):
+    """Desglose por posición de un indicador de `/historical`, con TODOS los
+    meses disponibles como columnas -> permite comparar una misma posición
+    mes a mes, no solo el corte de un período."""
+    attr = _HISTORICAL_POSITION_ATTR.get(metric)
+    if attr is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El indicador {metric!r} no se puede desglosar por posición.",
+        )
+
+    periods = repo.list_periods(db)
+    by_id: dict[str, dict] = {}
+    for idx, p in enumerate(periods):
+        metrics = repo.load_metrics(db, p.year, p.month)
+        filtered = filter_positions(metrics, type_=type, classification=classification)
+        for m in filtered:
+            row = by_id.setdefault(
+                m.identifier,
+                {
+                    "identifier": m.identifier,
+                    "description": m.description,
+                    "type": m.type,
+                    "classification": m.classification,
+                    "values": [None] * len(periods),
+                },
+            )
+            row["values"][idx] = getattr(m, attr)
+
+    rows = list(by_id.values())
+    rows.sort(key=lambda r: (r["values"][-1] is None, -(r["values"][-1] or 0)))
+    return {
+        "metric": metric,
+        "periods": [{"year": p.year, "month": p.month, "label": p.label} for p in periods],
+        "rows": rows,
+    }

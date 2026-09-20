@@ -13,6 +13,7 @@ from app.api.routes import (
     positions,
     returns,
     scenarios,
+    users,
 )
 
 api_router = APIRouter()
@@ -26,3 +27,4 @@ api_router.include_router(parameters.router)
 api_router.include_router(etl.router)
 api_router.include_router(data_admin.router)
 api_router.include_router(export.router)
+api_router.include_router(users.router)

@@ -24,12 +24,12 @@ def get_current_user(
 ) -> User:
     try:
         payload = decode_access_token(token)
-        email: str | None = payload.get("sub")
+        username: str | None = payload.get("sub")
     except jwt.PyJWTError as exc:  # noqa: F841
         raise _CREDENTIALS_EXC from None
-    if not email:
+    if not username:
         raise _CREDENTIALS_EXC
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(User.username == username).first()
     if user is None or not user.is_active:
         raise _CREDENTIALS_EXC
     return user
@@ -40,5 +40,16 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Se requiere rol 'admin' para esta operación.",
+        )
+    return user
+
+
+def require_upload_permission(user: User = Depends(get_current_user)) -> User:
+    """Admin siempre puede cargar; un lector solo si el admin le otorgó
+    `can_upload` desde Seguridad/Privacidad."""
+    if user.role != UserRole.admin and not user.can_upload:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para cargar archivos. Solicítalo a un administrador.",
         )
     return user

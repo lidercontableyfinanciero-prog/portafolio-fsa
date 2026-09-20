@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_admin
+from app.api.deps import require_admin, require_upload_permission
 from app.core.database import get_db
 from app.models.ingestion_log import IngestionLog, IngestionStatus
 from app.models.user import User
@@ -47,7 +47,7 @@ def _serialize(log: IngestionLog) -> dict:
     }
 
 
-@router.post("/upload", dependencies=[Depends(require_admin)])
+@router.post("/upload", dependencies=[Depends(require_upload_permission)])
 async def upload(
     file: UploadFile = File(...),
     dry_run: bool = Query(False, description="Solo previsualiza, no escribe."),
@@ -55,7 +55,7 @@ async def upload(
         False, description="Sobrescribe los meses que ya estuvieran cargados."
     ),
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_upload_permission),
 ):
     if not file.filename or not file.filename.lower().endswith(
         (".csv", ".xlsx", ".xlsm", ".xls")
@@ -70,7 +70,7 @@ async def upload(
         filename=file.filename,
         content_sha256=sha,
         uploaded_by_id=admin.id,
-        uploaded_by_email=admin.email,
+        uploaded_by_email=admin.username,
         dry_run=dry_run,
         replace_mode=replace,
     )

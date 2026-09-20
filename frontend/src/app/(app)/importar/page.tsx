@@ -2,10 +2,12 @@
 
 import { UploadHistory } from "@/components/datos/UploadHistory";
 import { UploadPanel } from "@/components/datos/UploadPanel";
-import { RoleGate } from "@/components/layout/RoleGate";
 import { EmptyState } from "@/components/ui/States";
+import { useAuth } from "@/lib/auth";
 
 export default function ImportarPage() {
+  const { canUpload } = useAuth();
+
   return (
     <div className="space-y-4">
       <div>
@@ -16,14 +18,14 @@ export default function ImportarPage() {
         </p>
       </div>
 
-      <RoleGate
-        fallback={
-          <EmptyState message="La importación de datos está disponible solo para administradores." />
-        }
-      >
-        <UploadPanel />
-        <UploadHistory />
-      </RoleGate>
+      {canUpload ? (
+        <>
+          <UploadPanel />
+          <UploadHistory />
+        </>
+      ) : (
+        <EmptyState message="No tienes permiso de carga. Solicítalo a un administrador desde Seguridad / Privacidad." />
+      )}
     </div>
   );
 }

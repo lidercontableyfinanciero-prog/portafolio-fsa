@@ -17,7 +17,8 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  canUpload: boolean;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -49,8 +50,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadMe]);
 
   const login = useCallback(
-    async (email: string, password: string) => {
-      const { access_token } = await api.login(email, password);
+    async (username: string, password: string) => {
+      const { access_token } = await api.login(username, password);
       tokenStore.set(access_token);
       const me = await api.get<User>("/auth/me");
       setUser(me);
@@ -66,7 +67,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const value = useMemo<AuthState>(
-    () => ({ user, loading, isAdmin: user?.role === "admin", login, logout }),
+    () => ({
+      user,
+      loading,
+      isAdmin: user?.role === "admin",
+      canUpload: user?.role === "admin" || user?.can_upload === true,
+      login,
+      logout,
+    }),
     [user, loading, login, logout],
   );
 

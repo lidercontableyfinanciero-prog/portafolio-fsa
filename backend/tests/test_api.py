@@ -17,7 +17,7 @@ pytestmark = pytest.mark.usefixtures("client")
 # Auth y control de acceso
 # --------------------------------------------------------------------------- #
 def test_login_bad_password(client):
-    r = client.post("/api/auth/login", data={"username": "admin@fundacionsanantonio.org", "password": "x"})
+    r = client.post("/api/auth/login", data={"username": "ADMIN_FSA", "password": "x"})
     assert r.status_code == 401
 
 

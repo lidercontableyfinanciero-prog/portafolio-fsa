@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth";
 
 export function Topbar() {
   const { user, logout, isAdmin } = useAuth();
-  const name = user?.full_name ?? user?.email ?? "";
+  const name = user?.full_name ?? user?.username ?? "";
   const initials = name
     .split(/[\s@.]+/)
     .filter(Boolean)

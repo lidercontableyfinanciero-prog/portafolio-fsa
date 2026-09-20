@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, Field
 
 from app.models.user import UserRole
 
@@ -12,13 +12,15 @@ class Token(BaseModel):
 
 class UserOut(BaseModel):
     id: int
-    email: EmailStr
+    username: str
     full_name: str | None
     role: UserRole
+    is_active: bool
+    can_upload: bool
 
     model_config = {"from_attributes": True}
 
 
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=6)

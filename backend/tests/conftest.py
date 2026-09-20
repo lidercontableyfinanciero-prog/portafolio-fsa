@@ -42,10 +42,12 @@ def seeded_db(_engine):
         pytest.skip(f"Excel de siembra no encontrado: {xlsx}")
 
     with Session() as db:
-        db.add(User(email="admin@fundacionsanantonio.org", hashed_password=hash_password("admin123"),
-                    full_name="Admin", role=UserRole.admin, is_active=True))
-        db.add(User(email="lector@fundacionsanantonio.org", hashed_password=hash_password("lector123"),
-                    full_name="Lector", role=UserRole.lector, is_active=True))
+        db.add(User(username="ADMIN_FSA", hashed_password=hash_password("admin123"),
+                    full_name="Admin", role=UserRole.admin, is_active=True, can_upload=True))
+        db.add(User(username="LECTOR1_FSA", hashed_password=hash_password("lector123"),
+                    full_name="Lector", role=UserRole.lector, is_active=True, can_upload=False))
+        db.add(User(username="LECTOR2_FSA", hashed_password=hash_password("lector456"),
+                    full_name="Lector 2", role=UserRole.lector, is_active=True, can_upload=False))
         db.add_all(Parameter(**p) for p in PARAMETERS)
         db.add_all(RatingScale(**r) for r in RATING_SCALE)
         raw = xlsx.read_bytes()
@@ -92,7 +94,7 @@ def client(_engine, seeded_db):
 def admin_token(client) -> str:
     r = client.post(
         "/api/auth/login",
-        data={"username": "admin@fundacionsanantonio.org", "password": "admin123"},
+        data={"username": "ADMIN_FSA", "password": "admin123"},
     )
     assert r.status_code == 200, r.text
     return r.json()["access_token"]
@@ -102,7 +104,17 @@ def admin_token(client) -> str:
 def lector_token(client) -> str:
     r = client.post(
         "/api/auth/login",
-        data={"username": "lector@fundacionsanantonio.org", "password": "lector123"},
+        data={"username": "LECTOR1_FSA", "password": "lector123"},
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["access_token"]
+
+
+@pytest.fixture()
+def lector2_token(client) -> str:
+    r = client.post(
+        "/api/auth/login",
+        data={"username": "LECTOR2_FSA", "password": "lector456"},
     )
     assert r.status_code == 200, r.text
     return r.json()["access_token"]

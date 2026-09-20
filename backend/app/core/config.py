@@ -50,10 +50,12 @@ class Settings(BaseSettings):
     seed_data_dir: str = "../Referencias"
     seed_informe_file: str = "1. INFORME INVERSIONES INTERNACIONALES FSA 2026 (2).xlsx"
     seed_dashboard_file: str = "2. DASHBOARD INVERSIONES INTERNACIONALES FSA 2026 (1).xlsx"
-    seed_admin_email: str = "admin@fundacionsanantonio.org"
+    seed_admin_username: str = "ADMIN_FSA"
     seed_admin_password: str = "admin123"
-    seed_lector_email: str = "lector@fundacionsanantonio.org"
-    seed_lector_password: str = "lector123"
+    seed_lector1_username: str = "LECTOR1_FSA"
+    seed_lector1_password: str = "lector123"
+    seed_lector2_username: str = "LECTOR2_FSA"
+    seed_lector2_password: str = "lector456"
 
     @property
     def seed_dir_path(self) -> Path:

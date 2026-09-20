@@ -6,6 +6,7 @@ import {
   CalendarRange,
   LayoutDashboard,
   LineChart,
+  ShieldCheck,
   TableProperties,
   TrendingUp,
   UploadCloud,
@@ -23,12 +24,13 @@ const NAV = [
   { href: "/escenarios", label: "Escenarios", icon: BarChart3 },
   { href: "/simulador-fx", label: "Simulador FX", icon: LineChart },
   { href: "/posiciones", label: "Posiciones", icon: TableProperties },
-  { href: "/importar", label: "Importar", icon: UploadCloud, adminOnly: true },
+  { href: "/importar", label: "Importar", icon: UploadCloud, requiresUpload: true },
+  { href: "/seguridad", label: "Seguridad", icon: ShieldCheck },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { isAdmin } = useAuth();
+  const { isAdmin, canUpload } = useAuth();
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-sidebar flex-col border-r border-white/10 bg-fsa-navy text-white lg:flex">
@@ -44,7 +46,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-0.5 px-3 py-4">
-        {NAV.filter((n) => !n.adminOnly || isAdmin).map(({ href, label, icon: Icon }) => {
+        {NAV.filter((n) => !n.requiresUpload || canUpload || isAdmin).map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
             <Link

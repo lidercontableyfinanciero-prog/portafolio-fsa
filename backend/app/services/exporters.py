@@ -298,12 +298,17 @@ def _fmt_pct(v) -> str:
 
 def positions_to_pdf(rows: list[dict], meta: dict) -> bytes:
     buf = io.BytesIO()
+    left_margin = right_margin = 10 * mm
     doc = SimpleDocTemplate(
         buf, pagesize=landscape(A4),
-        leftMargin=12 * mm, rightMargin=12 * mm, topMargin=12 * mm, bottomMargin=12 * mm,
+        leftMargin=left_margin, rightMargin=right_margin, topMargin=12 * mm, bottomMargin=12 * mm,
         title="Portafolio FSA — Posiciones",
     )
     ss = _pdf_styles()
+    # Celda con ajuste de línea (Paragraph) en vez de truncar texto con [:N]:
+    # así ninguna descripción/sector/etiqueta larga queda cortada ni se
+    # superpone a la columna vecina; la fila simplemente crece de alto.
+    cell_style = ParagraphStyle("FSACell", parent=ss["Normal"], fontSize=7, leading=8.5)
     story = []
     logo = _logo_flowable()
     if logo is not None:
@@ -318,22 +323,28 @@ def positions_to_pdf(rows: list[dict], meta: dict) -> bytes:
     data = [head]
     for r in rows:
         data.append([
-            (r.get("description") or "")[:28],
-            "—" if r.get("identifier") == r.get("description") else (r.get("identifier") or "")[:12],
-            (r.get("classification") or "")[:10],
+            Paragraph(r.get("description") or "", cell_style),
+            "—" if r.get("identifier") == r.get("description")
+            else Paragraph(r.get("identifier") or "", cell_style),
+            Paragraph(r.get("classification") or "", cell_style),
             r.get("type") or "",
-            (r.get("sector") or "")[:16],
+            Paragraph(r.get("sector") or "", cell_style),
             _fmt_money(r.get("cost_basis")),
             _fmt_money(r.get("market_value")),
             _fmt_money(r.get("unrealized_gain_loss")),
             _fmt_pct(r.get("return_on_cost")),
-            (r.get("stop_loss") or "")[:22],
-            (r.get("moodys_grade") or "")[:10],
+            Paragraph(r.get("stop_loss") or "", cell_style),
+            Paragraph(r.get("moodys_grade") or "", cell_style),
         ])
-    t = Table(data, repeatRows=1,
-              colWidths=[52 * mm, 22 * mm, 18 * mm, 14 * mm, 30 * mm, 20 * mm, 22 * mm,
-                         20 * mm, 16 * mm, 34 * mm, 22 * mm])
+    # Anchos proporcionales al ancho disponible real de la página (auto-fit):
+    # antes eran mm fijos que sumaban más que el área imprimible en A4
+    # horizontal y la última columna quedaba cortada fuera de la hoja.
+    avail_width = landscape(A4)[0] - left_margin - right_margin
+    weights = [0.20, 0.09, 0.08, 0.06, 0.12, 0.08, 0.09, 0.08, 0.06, 0.10, 0.04]
+    col_widths = [avail_width * w for w in weights]
+    t = Table(data, repeatRows=1, colWidths=col_widths)
     tstyle = _base_table_style()
+    tstyle.add("ALIGN", (5, 1), (8, -1), "RIGHT")
     for i, r in enumerate(rows, start=1):
         gl = r.get("unrealized_gain_loss") or 0
         tstyle.add("TEXTCOLOR", (7, i), (7, i), GREEN if gl >= 0 else RED)

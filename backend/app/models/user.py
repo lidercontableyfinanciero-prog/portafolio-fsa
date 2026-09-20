@@ -18,10 +18,17 @@ class User(TimestampMixin, Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    # Identificador de acceso (ya no es un correo): "ADMIN_FSA", "LECTOR1_FSA"...
+    username: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    # "Nombre Visible": lo asigna el admin en Seguridad/Privacidad y es lo que
+    # se muestra en el encabezado superior derecho (Topbar).
     full_name: Mapped[str | None] = mapped_column(String(255))
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role"), default=UserRole.lector, nullable=False
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Permiso de carga de archivos (Importar), asignable individualmente por
+    # el admin. El rol admin siempre puede cargar independientemente de este
+    # valor (ver `app.api.deps.require_upload_permission`).
+    can_upload: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

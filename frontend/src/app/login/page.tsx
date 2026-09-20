@@ -13,7 +13,7 @@ export default function LoginPage() {
   const { login, user, loading } = useAuth();
   const router = useRouter();
   const reduce = useReducedMotion();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -27,7 +27,7 @@ export default function LoginPage() {
     setError(null);
     setBusy(true);
     try {
-      await login(email, password);
+      await login(username, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo iniciar sesión");
     } finally {
@@ -68,15 +68,16 @@ export default function LoginPage() {
 
           <form onSubmit={onSubmit} className="mt-6 space-y-4">
             <label className="block">
-              <span className="mb-1.5 block text-sm font-500 text-fsa-navy">Correo</span>
+              <span className="mb-1.5 block text-sm font-500 text-fsa-navy">Usuario</span>
               <input
-                type="email"
+                type="text"
                 required
                 autoComplete="username"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                autoCapitalize="characters"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="h-11 w-full rounded-lg border border-fsa-border bg-white px-3.5 text-sm outline-none transition-shadow focus:border-fsa-blue focus:ring-4 focus:ring-fsa-blue/10"
-                placeholder="usuario@fundacionsanantonio.org"
+                placeholder="ADMIN_FSA"
               />
             </label>
             <label className="block">

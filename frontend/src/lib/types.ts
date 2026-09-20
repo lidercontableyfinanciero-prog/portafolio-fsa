@@ -2,9 +2,11 @@ export type Role = "admin" | "lector";
 
 export interface User {
   id: number;
-  email: string;
+  username: string;
   full_name: string | null;
   role: Role;
+  is_active: boolean;
+  can_upload: boolean;
 }
 
 export interface Period {
@@ -112,6 +114,20 @@ export interface HistoricalRow {
 export interface HistoricalMatrix {
   periods: HistoricalPeriod[];
   rows: HistoricalRow[];
+}
+
+export interface HistoricalPositionRow {
+  identifier: string;
+  description: string;
+  type: string | null;
+  classification: string | null;
+  values: (number | null)[];
+}
+
+export interface HistoricalPositionsBreakdown {
+  metric: string;
+  periods: HistoricalPeriod[];
+  rows: HistoricalPositionRow[];
 }
 
 export interface EvolutionPoint {

@@ -23,24 +23,31 @@ from app.core.security import hash_password
 
 
 def _seed_users(db) -> None:
+    # (username, password, nombre visible inicial, rol, permiso de carga inicial)
     wanted = [
-        (settings.seed_admin_email, settings.seed_admin_password, "Administrador FSA", UserRole.admin),
-        (settings.seed_lector_email, settings.seed_lector_password, "Lector FSA", UserRole.lector),
+        (settings.seed_admin_username, settings.seed_admin_password,
+         "Administrador FSA", UserRole.admin, True),
+        (settings.seed_lector1_username, settings.seed_lector1_password,
+         "Lector 1 FSA", UserRole.lector, False),
+        (settings.seed_lector2_username, settings.seed_lector2_password,
+         "Lector 2 FSA", UserRole.lector, False),
     ]
-    for email, password, name, role in wanted:
-        if db.query(User).filter(User.email == email).first():
+    for username, password, name, role, can_upload in wanted:
+        if db.query(User).filter(User.username == username).first():
             continue
         db.add(
             User(
-                email=email,
+                username=username,
                 hashed_password=hash_password(password),
                 full_name=name,
                 role=role,
                 is_active=True,
+                can_upload=can_upload,
             )
         )
     db.commit()
-    print(f"  usuarios: {settings.seed_admin_email} / {settings.seed_lector_email}")
+    usernames = ", ".join(u for u, *_ in wanted)
+    print(f"  usuarios: {usernames}")
 
 
 def _seed_parameters(db) -> None:

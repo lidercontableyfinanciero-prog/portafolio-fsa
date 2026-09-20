@@ -55,11 +55,13 @@ export const api = {
     request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   put: <T,>(path: string, body?: unknown) =>
     request<T>(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
+  patch: <T,>(path: string, body?: unknown) =>
+    request<T>(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
   del: <T,>(path: string) => request<T>(path, { method: "DELETE" }),
   upload: <T,>(path: string, form: FormData) =>
     request<T>(path, { method: "POST", body: form }),
-  login: async (email: string, password: string) => {
-    const form = new URLSearchParams({ username: email, password });
+  login: async (username: string, password: string) => {
+    const form = new URLSearchParams({ username, password });
     const res = await fetch(`${BASE}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
