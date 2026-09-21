@@ -13,8 +13,15 @@ export function LoginShowcase() {
   return (
     <div className="relative hidden overflow-hidden bg-fsa-navy lg:flex lg:flex-col lg:items-center lg:justify-center lg:px-14 lg:py-16 lg:text-center">
       <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: "url(/institucional/comunidad-ninos.jpg)" }}
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: "url(/institucional/comunidad-ninos.jpg)",
+          // Foto (contenido fotográfico, no pixel art): "auto" deja que el
+          // navegador use su interpolación bicúbica/bilinear de alta calidad
+          // al escalar. "crisp-edges"/"pixelated" son para gráficos de bajo
+          // detalle y aquí acentuarían el pixelado en vez de suavizarlo.
+          imageRendering: "auto",
+        }}
         role="img"
         aria-label="Comunidades de la Fundación San Antonio"
       />
