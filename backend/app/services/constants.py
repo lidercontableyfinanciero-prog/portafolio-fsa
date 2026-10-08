@@ -19,6 +19,13 @@ SP_INVESTMENT_GRADE = {
 }
 GRADE_INVESTMENT = "Grado de Inversión"
 GRADE_SPECULATIVE = "Grado Especulativo"
+# Bono sin calificación vigente en esa agencia ("***", "WR" retirada, "NR", vacío):
+# no se le asigna un grado artificial.
+GRADE_UNRATED = "Sin calificación"
+# Instrumento que NO es bono: la calificación crediticia no le aplica y queda
+# fuera de los KPI de riesgo Moody's / S&P.
+GRADE_NOT_APPLICABLE = "N/A"
+RATING_GRADES = [GRADE_INVESTMENT, GRADE_SPECULATIVE, GRADE_UNRATED]
 
 # --- Indicador Stop-Loss (columna AH) ---
 STOP_LOSS_STABLE = "Inversión Estable / Pérdida tolerable"
@@ -41,7 +48,11 @@ TRANSACTION_FEE_USD = 3.0
 
 # Días base usados en las hojas
 DAYS_YEAR_TERM = 365                      # Plazo Inicial de Compra
-DAYS_YEAR_HOLDING = 360                   # Plazo al Vencimiento / t de escenarios
+DAYS_YEAR_HOLDING = 360                   # Plazo de tenencia (col. AM) / t de escenarios
+DAYS_YEAR_MATURITY = 365                  # Tiempo al vencimiento (hoy -> vencimiento)
+
+# Moneda de los extractos del broker (todas las cifras vienen en USD).
+STATEMENT_CURRENCY = "USD"
 
 
 def month_name_to_index(name: str) -> int:

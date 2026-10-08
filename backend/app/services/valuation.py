@@ -15,9 +15,13 @@ from app.services.constants import (
     CASH_LIMIT_LOW,
     CONCENTRATION_LIMIT_USD,
     DAYS_YEAR_HOLDING,
+    DAYS_YEAR_MATURITY,
     DAYS_YEAR_TERM,
     GRADE_INVESTMENT,
+    GRADE_NOT_APPLICABLE,
     GRADE_SPECULATIVE,
+    GRADE_UNRATED,
+    STATEMENT_CURRENCY,
     MOODYS_INVESTMENT_GRADE,
     SP_INVESTMENT_GRADE,
     STOP_LOSS_EVALUATE,
@@ -45,26 +49,49 @@ def return_on_cost(gain_loss: float, cost_basis: float | None) -> float:
     return gain_loss / cb if cb else 0.0
 
 
+def is_bond(type_: str | None) -> bool:
+    """Única regla para decidir si una posición es un bono (tipo de activo "Bond")."""
+    return (type_ or "").strip().lower() == "bond"
+
+
 def valor_informe(
     market_value: float | None, accrued_interest: float | None, type_: str | None
 ) -> float:
     """Columna AF: bonos suman el interés acumulado estimado."""
-    if (type_ or "").strip().lower() == "bond":
+    if is_bond(type_):
         return _f(market_value) + _f(accrued_interest)
     return _f(market_value)
+
+
+def is_unrated(rating: str | None) -> bool:
+    """Sin calificación vigente: vacío, "***", "WR" (retirada) o "NR"."""
+    r = (rating or "").strip().upper()
+    return not r or "*" in r or r.startswith(("WR", "NR", "N/A"))
+
+
+def _grade(rating: str | None, investment_set: set[str]) -> str:
+    if is_unrated(rating):
+        return GRADE_UNRATED
+    r = (rating or "").strip().upper()
+    return GRADE_INVESTMENT if r in investment_set else GRADE_SPECULATIVE
 
 
 def moodys_grade(rating: str | None) -> str:
     """Columna AI. El extracto trae la calificación en MAYÚSCULAS ("BAA2"),
     mientras que la notación oficial de Moody's usa minúsculas ("Baa2") — se
     normaliza a mayúsculas en ambos lados para no perder coincidencias."""
-    r = (rating or "").strip().upper()
-    return GRADE_INVESTMENT if r in MOODYS_INVESTMENT_GRADE_NORM else GRADE_SPECULATIVE
+    return _grade(rating, MOODYS_INVESTMENT_GRADE_NORM)
 
 
 def sp_grade(rating: str | None) -> str:
-    r = (rating or "").strip().upper()
-    return GRADE_INVESTMENT if r in SP_INVESTMENT_GRADE_NORM else GRADE_SPECULATIVE
+    return _grade(rating, SP_INVESTMENT_GRADE_NORM)
+
+
+def credit_grade(grade: str, type_: str | None) -> str:
+    """KPI de riesgo crediticio: SOLO aplica a bonos. Acciones, fondos,
+    inversiones alternativas, efectivo, etc. quedan en "N/A" y fuera de los
+    KPI Moody's / S&P (no se les asigna una calificación artificial)."""
+    return grade if is_bond(type_) else GRADE_NOT_APPLICABLE
 
 
 def stop_loss_indicator(gain_loss: float, cost_basis: float | None) -> str:
@@ -91,11 +118,26 @@ def initial_term_years(acquired: date | None, maturity: date | None) -> float | 
 
 
 def term_to_maturity_years(acquired: date | None, as_of: date | None = None) -> float | None:
-    """Columna AM: (hoy − fecha de compra) / 360."""
+    """Columna AM del Excel ("Plazo al vencimiento"): (hoy − fecha de compra) / 360.
+    Pese al nombre del Excel mide el plazo de TENENCIA; para el tiempo que
+    falta hasta el vencimiento usar `time_to_maturity_years`."""
     if not acquired:
         return None
     ref = as_of or date.today()
     return (ref - acquired).days / DAYS_YEAR_HOLDING
+
+
+def time_to_maturity_years(maturity: date | None, as_of: date | None = None) -> float | None:
+    """Tiempo al vencimiento: (fecha de vencimiento − hoy) / 365, en años.
+
+    ÚNICA fuente de esta variable: la usan la columna de Posiciones, las alertas
+    "Vencimientos < 1 año" y "Plazo prom. vencimiento", sus ventanas de detalle
+    y los reportes. Negativo => la posición ya venció. `None` si no tiene
+    fecha de vencimiento (acciones, fondos, efectivo…)."""
+    if not maturity:
+        return None
+    ref = as_of or date.today()
+    return (maturity - ref).days / DAYS_YEAR_MATURITY
 
 
 def time_alert(initial_term: float | None) -> str:
@@ -144,7 +186,7 @@ def tax_rate(tax: float | None, dividends_paid: float | None) -> float:
 
 def accrued_coupon(cost_basis: float | None, coupon_rate: float | None, type_: str | None) -> float:
     """Columna Y — solo bonos."""
-    if (type_ or "").strip().lower() == "bond":
+    if is_bond(type_):
         return _f(cost_basis) * _f(coupon_rate)
     return 0.0
 
@@ -190,6 +232,11 @@ class PositionMetrics:
     classification: str | None
     type: str | None
     sector: str | None
+    acquired_date: date | None
+    maturity_date: date | None
+    coupon_rate: float | None
+    currency: str
+    face_value: float | None
     market_value: float
     cost_basis: float
     market_price: float
@@ -211,6 +258,7 @@ class PositionMetrics:
     stop_loss: str
     initial_term_years: float | None
     term_to_maturity_years: float | None
+    time_to_maturity_years: float | None
     time_alert: str
     issuer_alert: str
     cash_limit_alert: str
@@ -242,6 +290,13 @@ def compute_position(pos: PositionInput, as_of: date | None = None) -> PositionM
         classification=pos.classification,
         type=pos.type,
         sector=pos.sector,
+        acquired_date=pos.acquired_date,
+        maturity_date=pos.maturity_date,
+        # La tasa cupón solo aplica a bonos ("Tasa, si aplica").
+        coupon_rate=pos.coupon_rate if is_bond(pos.type) else None,
+        currency=STATEMENT_CURRENCY,
+        # En los bonos la cantidad del extracto es el valor nominal (par).
+        face_value=_f(pos.quantity) if is_bond(pos.type) else None,
         market_value=mv,
         cost_basis=cb,
         market_price=_f(pos.market_price),
@@ -258,11 +313,12 @@ def compute_position(pos: PositionInput, as_of: date | None = None) -> PositionM
         tax_rate=tax_rate(pos.tax, pos.dividends_paid),
         moodys_rating=pos.moodys_rating,
         sp_rating=pos.sp_rating,
-        moodys_grade=moodys_grade(pos.moodys_rating),
-        sp_grade=sp_grade(pos.sp_rating),
+        moodys_grade=credit_grade(moodys_grade(pos.moodys_rating), pos.type),
+        sp_grade=credit_grade(sp_grade(pos.sp_rating), pos.type),
         stop_loss=stop_loss_indicator(gl, cb),
         initial_term_years=it,
         term_to_maturity_years=term_to_maturity_years(pos.acquired_date, as_of),
+        time_to_maturity_years=time_to_maturity_years(pos.maturity_date, as_of),
         time_alert=time_alert(it),
         issuer_alert=issuer_alert(cb),
         cash_limit_alert=cash_limit_alert(mv, pos.type),

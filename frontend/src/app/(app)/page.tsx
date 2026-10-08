@@ -1,5 +1,7 @@
 "use client";
 
+import { FileCog } from "lucide-react";
+import { useState } from "react";
 import useSWR from "swr";
 
 import { ChartCard } from "@/components/charts/ChartCard";
@@ -9,6 +11,7 @@ import {
   DonutChart,
   TrendLines,
 } from "@/components/charts/Charts";
+import { AlertDetailModal, type AlertRequest } from "@/components/dashboard/AlertDetailModal";
 import { BreakdownTable } from "@/components/dashboard/BreakdownTable";
 import { ConcentracionPanel } from "@/components/dashboard/ConcentracionPanel";
 import { HeroBand } from "@/components/dashboard/HeroBand";
@@ -16,6 +19,7 @@ import { KpiRow } from "@/components/dashboard/KpiRow";
 import { PorTipoTable } from "@/components/dashboard/PorTipoTable";
 import { RiskPanels } from "@/components/dashboard/RiskPanels";
 import { SlicerBar } from "@/components/filters/SlicerBar";
+import { ReportConfigModal } from "@/components/reports/ReportConfigModal";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
 import { fetcher } from "@/lib/api";
@@ -32,13 +36,28 @@ export default function DashboardPage() {
     { keepPreviousData: true },
   );
   const { data: evolution } = useSWR<EvolutionPoint[]>("/portfolio/evolution", fetcher);
+  const [reportOpen, setReportOpen] = useState(false);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 print:hidden">
         <h1 className="font-display text-lg font-600 text-fsa-navy">Dashboard</h1>
-        <ExportMenu base="/export/dashboard" query={query} allowPrint />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setReportOpen(true)}
+            className="inline-flex min-h-[38px] items-center gap-1.5 rounded border border-fsa-border bg-white px-3 text-sm font-600 text-fsa-navy hover:bg-fsa-surface"
+          >
+            <FileCog className="h-3.5 w-3.5" aria-hidden />
+            Configurar reporte
+          </button>
+          <ExportMenu base="/export/dashboard" query={query} allowPrint />
+        </div>
       </div>
+      <ReportConfigModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        query={query}
+      />
 
       <SlicerBar />
 
@@ -49,7 +68,7 @@ export default function DashboardPage() {
       ) : !data ? (
         <EmptyState message="Sin datos para el período seleccionado." />
       ) : (
-        <DashboardContent data={data} evolution={evolution ?? []} />
+        <DashboardContent data={data} evolution={evolution ?? []} query={query} />
       )}
     </div>
   );
@@ -58,10 +77,13 @@ export default function DashboardPage() {
 function DashboardContent({
   data,
   evolution,
+  query,
 }: {
   data: DashboardPayload;
   evolution: EvolutionPoint[];
+  query: string;
 }) {
+  const [alert, setAlert] = useState<AlertRequest | null>(null);
   const periodLabel = `${data.period.month} ${data.period.year}`;
   const clsData = data.por_clasificacion.map((r) => ({
     name: r.label,
@@ -149,7 +171,7 @@ function DashboardContent({
           rows={data.por_tipo}
           mesAnterior={data.variacion_portafolio?.mes_anterior ?? ""}
         />
-        <ConcentracionPanel items={data.limites_concentracion} />
+        <ConcentracionPanel items={data.limites_concentracion} onSelect={setAlert} />
       </section>
 
       <ChartCard
@@ -166,7 +188,8 @@ function DashboardContent({
         <CategoryBars data={sectorData} layout="horizontal" />
       </ChartCard>
 
-      <RiskPanels d={data} />
+      <RiskPanels d={data} onSelect={setAlert} />
+      <AlertDetailModal request={alert} query={query} onClose={() => setAlert(null)} />
 
       <section className="grid gap-3 lg:grid-cols-2">
         <BreakdownTable title="Distribución por clasificación" rows={data.por_clasificacion} />

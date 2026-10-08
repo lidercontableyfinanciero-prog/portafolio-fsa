@@ -5,7 +5,8 @@ import { RotateCcw } from "lucide-react";
 import { Select } from "@/components/ui/Select";
 import { useFilters } from "@/lib/filters";
 
-const GRADES = ["Grado de Inversión", "Grado Especulativo"];
+// KPI de riesgo crediticio: solo aplica a bonos (el resto queda "N/A").
+const GRADES = ["Grado de Inversión", "Grado Especulativo", "Sin calificación"];
 
 /** Segmentadores del Dashboard. Moody's y S&P se filtran de forma independiente. */
 export function SlicerBar() {

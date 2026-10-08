@@ -12,6 +12,7 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.monthly_return import MonthlyReturn
 from app.services import exporters, portfolio_repo as repo
+from app.services.report_columns import catalog as column_catalog
 from app.services.aggregations import build_dashboard, filter_positions, payload_to_dict
 from app.services.twr import MonthlyReturnInput, time_weighted_return
 
@@ -70,6 +71,7 @@ def _common_params(
     stop_loss: list[str] | None = Query(None),
     time_alert: list[str] | None = Query(None),
     issuer_alert: list[str] | None = Query(None),
+    search: str | None = None,
     as_of: date | None = None,
 ):
     y, m = _resolve(db, year, month)
@@ -84,6 +86,9 @@ def _common_params(
         issuer_alert=issuer_alert,
     )
     metrics = _filtered_metrics(db, y, m, as_of, **flt)
+    if search:  # mismo criterio que la búsqueda de la tabla de Posiciones
+        s = search.lower()
+        metrics = [r for r in metrics if s in r.description.lower() or s in r.identifier.lower()]
 
     def _fmt(v):
         return ", ".join(v) if isinstance(v, list) else v
@@ -99,6 +104,7 @@ def _common_params(
             "stop-loss": _fmt(stop_loss),
             "alerta tiempo": _fmt(time_alert),
             "alerta emisor": _fmt(issuer_alert),
+            "búsqueda": search,
         },
     }
     return db, metrics, meta, y
@@ -118,20 +124,36 @@ def _slug(meta: dict) -> str:
 
 
 # --------------------------------------------------------------------------- #
+@router.get("/positions/columns")
+def positions_columns():
+    """Catálogo de columnas disponibles para "Configurar reporte"."""
+    return column_catalog()
+
+
+_COLUMNS_QUERY = Query(
+    None, description="Columnas a incluir (claves del catálogo). Vacío = formato por defecto."
+)
+
+
 @router.get("/positions.xlsx")
-def positions_xlsx(bundle=Depends(_common_params)):
+def positions_xlsx(bundle=Depends(_common_params), columns: list[str] | None = _COLUMNS_QUERY):
     _db, metrics, meta, _ = bundle
-    rows = [asdict(m) for m in metrics]
-    data = exporters.positions_to_xlsx(rows, meta)
+    rows = [asdict(m) for m in _sorted_for_report(metrics)]
+    data = exporters.positions_to_xlsx(rows, meta, columns)
     return _attach(data, _XLSX, f"posiciones_{_slug(meta)}.xlsx")
 
 
 @router.get("/positions.pdf")
-def positions_pdf(bundle=Depends(_common_params)):
+def positions_pdf(bundle=Depends(_common_params), columns: list[str] | None = _COLUMNS_QUERY):
     _db, metrics, meta, _ = bundle
-    rows = [asdict(m) for m in metrics]
-    data = exporters.positions_to_pdf(rows, meta)
+    rows = [asdict(m) for m in _sorted_for_report(metrics)]
+    data = exporters.positions_to_pdf(rows, meta, columns)
     return _attach(data, "application/pdf", f"posiciones_{_slug(meta)}.pdf")
+
+
+def _sorted_for_report(metrics):
+    """Mismo orden por defecto que la tabla de Posiciones (valor de mercado desc.)."""
+    return sorted(metrics, key=lambda m: m.market_value, reverse=True)
 
 
 @router.get("/dashboard.xlsx")

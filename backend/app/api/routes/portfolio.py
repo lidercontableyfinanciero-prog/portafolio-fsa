@@ -8,7 +8,13 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.services import portfolio_repo as repo
-from app.services.aggregations import build_dashboard, filter_positions, payload_to_dict
+from app.services.aggregations import (
+    UnknownAlert,
+    alert_detail,
+    build_dashboard,
+    filter_positions,
+    payload_to_dict,
+)
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"], dependencies=[Depends(get_current_user)])
 
@@ -102,6 +108,41 @@ def dashboard(
         "sp_grade": sp_grade,
     }
     return payload
+
+
+@router.get("/alerts/detail")
+def alert_positions(
+    db: Session = Depends(get_db),
+    alert: str = Query(..., description="Clave de la alerta o del panel de riesgo."),
+    label: str | None = Query(None, description="Categoría del panel (p. ej. 'Revisar')."),
+    year: int | None = None,
+    month: str | None = None,
+    type: str | None = Query(None),
+    classification: str | None = None,
+    sector: str | None = None,
+    moodys_grade: str | None = None,
+    sp_grade: str | None = None,
+    as_of: date | None = None,
+):
+    """Ventana de detalle de cualquier alerta del dashboard: posiciones que
+    cumplen la condición, con los mismos filtros activos del dashboard."""
+    year, month = _resolve_period(db, year, month)
+    metrics = repo.load_metrics(db, year, month, as_of=as_of)
+    filtered = filter_positions(
+        metrics,
+        type_=type,
+        classification=classification,
+        sector=sector,
+        moodys_grade=moodys_grade,
+        sp_grade=sp_grade,
+    )
+    try:
+        detail = alert_detail(filtered, alert, label)
+    except UnknownAlert as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    detail["period"] = {"year": year, "month": month}
+    detail["as_of"] = as_of or date.today()
+    return detail
 
 
 @router.get("/evolution")

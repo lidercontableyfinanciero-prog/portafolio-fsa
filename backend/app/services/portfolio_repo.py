@@ -14,6 +14,7 @@ from app.models.instrument import Instrument
 from app.models.monthly_return import MonthlyReturn
 from app.models.snapshot import PositionSnapshot
 from app.services.constants import (
+    RATING_GRADES,
     month_index_to_name,
     month_name_to_index,
     report_label,
@@ -212,7 +213,7 @@ def filter_options(db: Session) -> dict:
         "types": distinct(Instrument.type),
         "classifications": distinct(Instrument.classification),
         "sectors": distinct(Instrument.sector),
-        "rating_grades": ["Grado de Inversión", "Grado Especulativo"],
+        "rating_grades": list(RATING_GRADES),
     }
 
 

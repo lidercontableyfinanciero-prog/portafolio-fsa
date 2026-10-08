@@ -9,6 +9,7 @@ from app.services.valuation import (
     moodys_grade,
     sp_grade,
     stop_loss_indicator,
+    time_to_maturity_years,
     unrealized_gain_loss,
     valor_informe,
 )
@@ -27,7 +28,11 @@ def test_stop_loss_metinvest_is_monitoreo():
 
 
 def test_rating_grades():
-    assert moodys_grade("***") == "Grado Especulativo"
+    # Sin calificación vigente ("***", retirada "WR", vacío) -> no se asigna grado.
+    assert moodys_grade("***") == "Sin calificación"
+    assert moodys_grade("WR<") == "Sin calificación"
+    assert sp_grade(None) == "Sin calificación"
+    assert moodys_grade("BA2") == "Grado Especulativo"
     assert sp_grade("CCC+") == "Grado Especulativo"
     assert moodys_grade("Baa3") == "Grado de Inversión"
     assert sp_grade("BBB-") == "Grado de Inversión"
@@ -51,3 +56,33 @@ def test_issuer_alert_threshold():
     p = PositionInput(identifier="X", description="x", total_cost_basis=600000,
                       estimated_market_value=600000)
     assert compute_position(p).issuer_alert == "Revisar"
+
+
+def test_credit_kpi_only_for_bonds():
+    """Moody's / S&P solo aplican a bonos: el resto queda en "N/A"."""
+    eq = compute_position(PositionInput(identifier="E", description="Accion", type="Equity",
+                                        moodys_rating="Baa1", sp_rating="BBB"))
+    assert eq.moodys_grade == eq.sp_grade == "N/A"
+    for t in ("Mutual Fund", "Alternative Investment", "Cash"):
+        m = compute_position(PositionInput(identifier=t, description=t, type=t))
+        assert m.moodys_grade == m.sp_grade == "N/A"
+    bond = compute_position(PositionInput(identifier="B", description="Bono", type="Bond",
+                                          moodys_rating="BAA2", sp_rating="***"))
+    assert bond.moodys_grade == "Grado de Inversión"
+    assert bond.sp_grade == "Sin calificación"
+
+
+def test_time_to_maturity_single_source():
+    hoy = date(2026, 10, 8)
+    # (vencimiento - hoy) / 365
+    assert round(time_to_maturity_years(date(2028, 9, 20), hoy), 2) == 1.95
+    assert time_to_maturity_years(None, hoy) is None
+    assert time_to_maturity_years(date(2026, 1, 1), hoy) < 0          # ya vencido
+    m = compute_position(
+        PositionInput(identifier="B", description="Bono", type="Bond",
+                      maturity_date=date(2027, 3, 15), acquired_date=date(2020, 1, 1),
+                      quantity=200_000, estimated_market_value=199_000),
+        as_of=hoy,
+    )
+    assert m.time_to_maturity_years == time_to_maturity_years(date(2027, 3, 15), hoy)
+    assert m.face_value == 200_000 and m.currency == "USD"

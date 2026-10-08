@@ -54,3 +54,22 @@ export const fmtDeltaPct = (v: number | null | undefined) => {
   if (v == null || Number.isNaN(v)) return "—";
   return (v >= 0 ? "+" : "") + pct2.format(v);
 };
+
+const years2 = new Intl.NumberFormat("es-CO", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/** Años con 2 decimales: "0,45 años". Negativo => ya venció. */
+export const fmtYears = (v: number | null | undefined, unit = true) => {
+  if (v == null || Number.isNaN(v)) return "—";
+  if (v < 0) return "Vencido";
+  return unit ? `${years2.format(v)} años` : years2.format(v);
+};
+
+/** Fecha ISO (YYYY-MM-DD) -> dd/mm/aaaa, sin desfase de zona horaria. */
+export const fmtDate = (iso: string | null | undefined) => {
+  if (!iso) return "—";
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  return y && m && d ? `${d}/${m}/${y}` : iso;
+};

@@ -29,16 +29,57 @@ def test_kpis():
 
 
 def test_filter_by_rating_grade_independent():
-    # A = BBB -> Grado de Inversión ; B = BB y C (Cash, sin rating) -> Grado Especulativo
+    # A (Bono, S&P BBB) -> Grado de Inversión. B (acción) y C (Cash) NO son bonos:
+    # su KPI crediticio es "N/A" aunque traigan calificación.
     inv = filter_positions(_sample(), sp_grade="Grado de Inversión")
     assert {p.identifier for p in inv} == {"A"}
     spec = filter_positions(_sample(), sp_grade="Grado Especulativo")
-    assert {p.identifier for p in spec} == {"B", "C"}
+    assert spec == []
     # Moody's y S&P se pueden combinar (independientes y simultáneos)
     both = filter_positions(
-        _sample(), moodys_grade="Grado Especulativo", sp_grade="Grado de Inversión"
+        _sample(), moodys_grade="Sin calificación", sp_grade="Grado de Inversión"
     )
     assert {p.identifier for p in both} == {"A"}
+
+
+def test_credit_panels_only_count_bonds():
+    payload = build_dashboard(_sample())
+    for rows in (payload.calidad_moodys, payload.calidad_sp):
+        assert sum(r.posiciones for r in rows) == 1          # solo el bono A
+        assert abs(sum(r.pct_participacion for r in rows) - 1.0) < 1e-9  # % sobre bonos
+    assert payload.calidad_universo.posiciones == 1
+    assert payload.calidad_universo.valor_mercado == 95_000
+
+
+def test_alert_detail_matches_counter():
+    from datetime import date
+
+    from app.services.aggregations import alert_detail
+
+    hoy = date(2026, 10, 8)
+    raw = [
+        PositionInput(identifier="X", description="Bono corto", type="Bond",
+                      maturity_date=date(2027, 3, 15), estimated_market_value=100),
+        PositionInput(identifier="Y", description="Bono largo", type="Bond",
+                      maturity_date=date(2030, 12, 10), estimated_market_value=200),
+        PositionInput(identifier="Z", description="Accion", type="Equity",
+                      estimated_market_value=300),
+    ]
+    pos = [compute_position(p, as_of=hoy) for p in raw]
+    ra = build_dashboard(pos).risk_alerts
+
+    venc = alert_detail(pos, "vencimientos_1a")
+    assert [i["identifier"] for i in venc["items"]] == ["X"]
+    assert venc["summary"]["posiciones"] == ra.vencimientos_1a_posiciones == 1
+
+    plazo = alert_detail(pos, "plazo_prom_vencimiento")
+    assert {i["identifier"] for i in plazo["items"]} == {"X", "Y"}   # solo bonos
+    assert plazo["summary"]["plazo_promedio_anios"] == ra.plazo_prom_vencimiento_bonos
+    assert "time_to_maturity_years" in plazo["columns"]
+
+    # Panel dinámico: misma función para cualquier alerta/categoría
+    eq = alert_detail(pos, "calidad_moodys", "Sin calificación")
+    assert {i["identifier"] for i in eq["items"]} == {"X", "Y"}      # la acción no entra
 
 
 def test_dashboard_breakdowns():

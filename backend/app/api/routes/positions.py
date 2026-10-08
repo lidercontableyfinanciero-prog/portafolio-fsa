@@ -18,7 +18,7 @@ _SORTABLE = {
     "cost_basis", "unrealized_gain_loss", "return_on_cost", "annual_income",
     "current_yield", "dividends_paid", "tax", "tax_rate", "equity_return_on_cost",
     "equity_market_value_return", "stop_loss", "time_alert", "issuer_alert",
-    "moodys_grade", "sp_grade",
+    "moodys_grade", "sp_grade", "acquired_date", "maturity_date", "time_to_maturity_years",
 }
 
 

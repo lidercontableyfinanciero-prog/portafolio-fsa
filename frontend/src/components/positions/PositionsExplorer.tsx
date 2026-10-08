@@ -7,25 +7,26 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDown, ArrowUp, ChevronsUpDown, RotateCcw } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronsUpDown, FileCog, RotateCcw } from "lucide-react";
 import { Fragment, type ReactNode, useMemo, useState } from "react";
 import useSWR from "swr";
 
 import { PositionHistoryChart } from "@/components/positions/PositionHistoryChart";
+import { ReportConfigModal } from "@/components/reports/ReportConfigModal";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
-import { ExportMenu } from "@/components/ui/ExportMenu";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { Select } from "@/components/ui/Select";
 import { EmptyState, ErrorState, Spinner } from "@/components/ui/States";
 import { fetcher } from "@/lib/api";
 import { FSA, gradeColor, stopLossColor } from "@/lib/colors";
-import { fmtPct, fmtUSD } from "@/lib/format";
+import { fmtDate, fmtPct, fmtUSD, fmtYears } from "@/lib/format";
 import { useFilters } from "@/lib/filters";
 import type { PositionRow, PositionsResponse, PositionsTotals } from "@/lib/types";
 
 const col = createColumnHelper<PositionRow>();
-const GRADES = ["Grado de Inversión", "Grado Especulativo"];
+// KPI de riesgo crediticio: solo bonos; el resto de activos queda en "N/A".
+const GRADES = ["Grado de Inversión", "Grado Especulativo", "Sin calificación"];
 const STOP_LOSS_VALUES = [
   "Inversión Estable / Pérdida tolerable",
   "Monitoreo",
@@ -67,6 +68,15 @@ const money = { meta: { num: true } } as const;
 
 const alertColor = (v: string) => (v === "OK" ? FSA.green : FSA.orange);
 
+const gradeBadge = (g: string) =>
+  g === "N/A" ? (
+    <span className="text-fsa-muted" title="Solo aplica a bonos">
+      —
+    </span>
+  ) : (
+    <Badge color={g === "Sin calificación" ? FSA.muted : gradeColor(g)}>{g}</Badge>
+  );
+
 /** Contenido de la fila de totales (pie de tabla) por columna, o `null` si esa
  * columna no admite un total (texto, calificación, badge de alerta, etc.). */
 function footerCell(columnId: string, t: PositionsTotals): ReactNode {
@@ -104,6 +114,7 @@ export function PositionsExplorer() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const effYear = year ?? latest?.year ?? null;
   const effMonth = month ?? latest?.month ?? null;
@@ -158,6 +169,25 @@ export function PositionsExplorer() {
       }),
       col.accessor("type", { header: "Tipo" }),
       col.accessor("sector", { header: "Sector" }),
+      col.accessor("maturity_date", {
+        header: "Fecha vencimiento",
+        cell: (c) => fmtDate(c.getValue()),
+        ...money,
+      }),
+      col.accessor("time_to_maturity_years", {
+        header: "Tiempo al vencimiento",
+        // Misma variable que usan las alertas "Vencimientos < 1 año" y
+        // "Plazo prom. vencimiento" (backend: time_to_maturity_years).
+        cell: (c) => {
+          const v = c.getValue();
+          return (
+            <span style={v != null && v < 1 ? { color: FSA.orange, fontWeight: 600 } : undefined}>
+              {fmtYears(v)}
+            </span>
+          );
+        },
+        ...money,
+      }),
       col.accessor("cost_basis", { header: "Costo", cell: (c) => fmtUSD(c.getValue()), ...money }),
       col.accessor("market_value", {
         header: "V. Mercado",
@@ -215,7 +245,7 @@ export function PositionsExplorer() {
       }),
       col.accessor("moodys_grade", {
         header: "KPI Riesgo Moody's",
-        cell: (c) => <Badge color={gradeColor(c.getValue())}>{c.getValue()}</Badge>,
+        cell: (c) => gradeBadge(c.getValue()),
       }),
       col.accessor("sp_rating", {
         header: "S&P",
@@ -223,7 +253,7 @@ export function PositionsExplorer() {
       }),
       col.accessor("sp_grade", {
         header: "KPI Riesgo S&P",
-        cell: (c) => <Badge color={gradeColor(c.getValue())}>{c.getValue()}</Badge>,
+        cell: (c) => gradeBadge(c.getValue()),
       }),
       col.accessor("stop_loss", {
         header: "Stop-Loss",
@@ -248,7 +278,8 @@ export function PositionsExplorer() {
   );
 
   const SORTABLE = new Set([
-    "description", "identifier", "type", "sector", "cost_basis", "market_value",
+    "description", "identifier", "type", "sector", "maturity_date", "time_to_maturity_years",
+    "cost_basis", "market_value",
     "unrealized_gain_loss", "return_on_cost", "current_yield", "dividends_paid",
     "tax", "tax_rate", "equity_return_on_cost", "equity_market_value_return",
     "moodys_grade", "sp_grade", "stop_loss", "time_alert", "issuer_alert",
@@ -387,8 +418,19 @@ export function PositionsExplorer() {
                 Limpiar {activeCount}
               </button>
             ) : null}
-            <ExportMenu base="/export/positions" query={exportQuery} />
+            <button
+              onClick={() => setReportOpen(true)}
+              className="inline-flex min-h-[38px] items-center gap-1.5 rounded border border-fsa-border bg-white px-3 text-sm font-600 text-fsa-navy hover:bg-fsa-surface"
+            >
+              <FileCog className="h-3.5 w-3.5" aria-hidden />
+              Configurar reporte / Exportar
+            </button>
           </div>
+          <ReportConfigModal
+            open={reportOpen}
+            onClose={() => setReportOpen(false)}
+            query={exportQuery + (search ? `&search=${encodeURIComponent(search)}` : "")}
+          />
         </div>
       </Card>
 

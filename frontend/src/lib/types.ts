@@ -86,6 +86,8 @@ export interface DashboardPayload {
   por_sector: BreakdownRow[];
   calidad_moodys: BreakdownRow[];
   calidad_sp: BreakdownRow[];
+  /** Universo de los KPI de calidad crediticia: solo bonos. */
+  calidad_universo: { posiciones: number; valor_mercado: number };
   stop_loss: BreakdownRow[];
   alerta_tiempo: BreakdownRow[];
   alerta_emisor: BreakdownRow[];
@@ -149,6 +151,11 @@ export interface PositionRow {
   classification: string | null;
   type: string | null;
   sector: string | null;
+  acquired_date: string | null;
+  maturity_date: string | null;
+  coupon_rate: number | null;
+  currency: string;
+  face_value: number | null;
   market_value: number;
   cost_basis: number;
   market_price: number;
@@ -170,6 +177,8 @@ export interface PositionRow {
   stop_loss: string;
   initial_term_years: number | null;
   term_to_maturity_years: number | null;
+  /** Tiempo al vencimiento (años): (vencimiento − hoy) / 365. Única fuente. */
+  time_to_maturity_years: number | null;
   time_alert: string;
   issuer_alert: string;
   cash_limit_alert: string;
@@ -331,4 +340,41 @@ export interface TwrRow {
   cumulative_twr: number | null;
   cumulative_benchmark: number | null;
   cumulative_alpha: number | null;
+}
+
+export type ReportColumnKind = "text" | "money" | "price" | "pct" | "date" | "years" | "number";
+
+/** Columna del catálogo único de reportes (`GET /export/positions/columns`). */
+export interface ReportColumn {
+  key: keyof PositionRow & string;
+  label: string;
+  short: string;
+  kind: ReportColumnKind;
+  group: string;
+  pdf_weight: number;
+  total: boolean;
+  default: boolean;
+}
+
+export interface AlertDetailSummary {
+  posiciones: number;
+  valor_mercado: number;
+  costo: number;
+  gp_no_realizada: number;
+  pct_universo: number;
+  universo_posiciones: number;
+  con_vencimiento: number;
+  plazo_promedio_anios: number | null;
+}
+
+export interface AlertDetail {
+  alert: string;
+  label: string | null;
+  title: string;
+  description: string;
+  columns: (keyof PositionRow & string)[];
+  summary: AlertDetailSummary;
+  items: PositionRow[];
+  period: { year: number; month: string };
+  as_of: string;
 }

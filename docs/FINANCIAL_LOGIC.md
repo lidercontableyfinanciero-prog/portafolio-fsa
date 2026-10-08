@@ -32,16 +32,39 @@ Grado de Inversión si:
 - Moody's ∈ {Aaa, Aa1, Aa2, Aa3, A1, A2, A3, Baa1, Baa2, Baa3}
 - S&P ∈ {AAA, AA+, AA, AA-, A+, A, A-, BBB+, BBB, BBB-}
 
-En otro caso: **Grado Especulativo** (incluye ratings faltantes / `***`).
+En otro caso: **Grado Especulativo**.
+
+**Regla de universo (obligatoria):** el KPI de riesgo crediticio SOLO aplica a
+posiciones `type == "Bond"`. Acciones, fondos, inversiones alternativas y efectivo
+quedan en `"N/A"` y no entran en los paneles Moody's / S&P (no se les asigna una
+calificación artificial). Un bono sin calificación vigente en esa agencia (`***`,
+`WR` retirada, `NR`, vacío) queda en **Sin calificación**.
+Paneles del dashboard: conteo y `%` calculados sobre el universo de bonos
+(`calidad_universo`); `Σ posiciones Moody's = Σ posiciones S&P = N° de bonos`.
 
 ### Plazos y alertas
 ```
 plazo_inicial_anios   = (maturity_date - acquired_date) / 365
-plazo_al_vencimiento  = (hoy - acquired_date) / 360
+plazo_tenencia (col. AM, "Plazo al vencimiento" en el Excel) = (hoy - acquired_date) / 360
+tiempo_al_vencimiento = (maturity_date - hoy) / 365      # time_to_maturity_years
 alerta_tiempo   = "Revisar" si plazo_inicial_anios > 15
 alerta_emisor   = "Revisar" si total_cost_basis > 500_000
 limite_cash     = "Revision" si market_value < 150_000 o > 200_000
                   — SOLO aplica a posiciones de tipo Cash; el resto -> "N/A".
+```
+
+`tiempo_al_vencimiento` es la ÚNICA fuente de esta variable: columna "Tiempo al
+vencimiento" de Posiciones, reportes, alertas y ventanas de detalle.
+
+### Alertas operativas (`aggregations.ALERT_RULES` / `PANEL_RULES`)
+Registro único de condiciones; la tarjeta y su ventana de detalle
+(`GET /api/portfolio/alerts/detail?alert=…&label=…`) usan el mismo predicado.
+```
+vencimientos_1a         = tiempo_al_vencimiento < 1         (incluye ya vencidos)
+plazo_prom_vencimiento  = promedio simple de tiempo_al_vencimiento de los bonos
+emisores_sobre_limite   = alerta_emisor == "Revisar"
+stop_loss_venta         = stop_loss ∈ {Evaluar Venta, Ejecutar Venta - Previa Revisión}
+conteo de posiciones    = market_value > 0   (igual que n_posiciones)
 ```
 
 ### Rentabilidad de Renta Variable (columnas Z y AA)

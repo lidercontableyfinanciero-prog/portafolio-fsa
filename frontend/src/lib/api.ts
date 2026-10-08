@@ -77,8 +77,11 @@ export const api = {
 
 export const fetcher = <T,>(path: string) => api.get<T>(path);
 
-/** Descarga autenticada: pide el archivo con el bearer token y dispara el guardado. */
-export async function downloadFile(path: string, fallbackName = "descarga") {
+/** Pide un archivo autenticado y lo devuelve como Blob (+ nombre sugerido). */
+export async function fetchBlob(
+  path: string,
+  fallbackName = "descarga",
+): Promise<{ blob: Blob; name: string }> {
   const headers = new Headers();
   const token = tokenStore.get();
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -95,8 +98,11 @@ export async function downloadFile(path: string, fallbackName = "descarga") {
   }
   const cd = res.headers.get("content-disposition") ?? "";
   const match = /filename="?([^"]+)"?/.exec(cd);
-  const name = match ? match[1] : fallbackName;
-  const blob = await res.blob();
+  return { blob: await res.blob(), name: match ? match[1] : fallbackName };
+}
+
+/** Dispara el guardado de un Blob ya descargado. */
+export function saveBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -105,4 +111,10 @@ export async function downloadFile(path: string, fallbackName = "descarga") {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Descarga autenticada: pide el archivo con el bearer token y dispara el guardado. */
+export async function downloadFile(path: string, fallbackName = "descarga") {
+  const { blob, name } = await fetchBlob(path, fallbackName);
+  saveBlob(blob, name);
 }

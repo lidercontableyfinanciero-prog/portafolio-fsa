@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import io
+from xml.sax.saxutils import escape
 from datetime import datetime
 from pathlib import Path
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.table import Table as XlTable
+from openpyxl.worksheet.table import TableStyleInfo
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfgen import canvas
 from reportlab.platypus import (
     Image,
     Paragraph,
@@ -20,6 +24,13 @@ from reportlab.platypus import (
     Spacer,
     Table,
     TableStyle,
+)
+
+from app.services.report_columns import (
+    LEGACY_PDF_COLUMNS,
+    LEGACY_XLSX_COLUMNS,
+    ReportColumn,
+    resolve_columns,
 )
 
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "logo_fsa.png"
@@ -47,41 +58,6 @@ RED = colors.HexColor("#C0392B")
 
 _HEADER_FILL = PatternFill("solid", fgColor="0E2841")
 _HEADER_FONT = Font(color="FFFFFF", bold=True)
-
-POSITION_COLUMNS: list[tuple[str, str]] = [
-    ("description", "Descripción"),
-    ("identifier", "CUSIP/CINS"),
-    ("classification", "Clasificación"),
-    ("type", "Tipo"),
-    ("sector", "Sector"),
-    ("cost_basis", "Costo (USD)"),
-    ("market_value", "Valor de Mercado (USD)"),
-    ("unrealized_gain_loss", "G/(P) No Realizada (USD)"),
-    ("return_on_cost", "Rentab. s/ Costo"),
-    ("annual_income", "Ingreso Anual Est. (USD)"),
-    ("accrued_interest", "Interés Acumulado (USD)"),
-    ("dividends_paid", "Intereses/Dividendos Pagados (USD)"),
-    ("tax", "Impuesto (USD)"),
-    ("tax_rate", "Tasa Impositiva"),
-    ("current_yield", "Yield Actual"),
-    ("equity_return_on_cost", "Rentab. Costo (Renta Var.)"),
-    ("equity_market_value_return", "Rentab. Valor Mercado (Renta Var.)"),
-    ("moodys_rating", "Moody's"),
-    ("moodys_grade", "Grado Moody's"),
-    ("sp_rating", "S&P"),
-    ("sp_grade", "Grado S&P"),
-    ("stop_loss", "Indicador Stop-Loss"),
-    ("time_alert", "Alerta Tiempo"),
-    ("issuer_alert", "Alerta Emisor"),
-]
-_PCT_COLS = {
-    "return_on_cost", "tax_rate", "current_yield",
-    "equity_return_on_cost", "equity_market_value_return",
-}
-_MONEY_COLS = {
-    "cost_basis", "market_value", "unrealized_gain_loss", "annual_income",
-    "accrued_interest", "dividends_paid", "tax",
-}
 
 _MONEY = "#,##0.00"
 _PCT = "0.00%"
@@ -115,26 +91,69 @@ def _autosize(ws, max_width: int = 48) -> None:
         ws.column_dimensions[get_column_letter(col[0].column)].width = min(length + 2, max_width)
 
 
-def positions_to_xlsx(rows: list[dict], meta: dict) -> bytes:
+_XLSX_FORMATS = {
+    "money": _MONEY,
+    "price": "#,##0.00##",
+    "pct": _PCT,
+    "date": "DD/MM/YYYY",
+    "years": "0.00",
+    "number": "#,##0.####",
+}
+
+
+def _column_totals(rows: list[dict], columns: list[ReportColumn]) -> dict[str, float]:
+    """Totales de las columnas sumables + rentabilidad s/ costo del conjunto."""
+    totals = {
+        c.key: sum(r.get(c.key) or 0 for r in rows) for c in columns if c.total
+    }
+    if any(c.key == "return_on_cost" for c in columns):
+        cost = sum(r.get("cost_basis") or 0 for r in rows)
+        gl = sum(r.get("unrealized_gain_loss") or 0 for r in rows)
+        totals["return_on_cost"] = gl / cost if cost else 0.0
+    return totals
+
+
+def positions_to_xlsx(
+    rows: list[dict], meta: dict, columns: list[str] | None = None
+) -> bytes:
+    """Hoja "Posiciones" con SOLO las columnas seleccionadas (o el formato
+    histórico si no se indica ninguna), como tabla de Excel con filtros."""
+    cols = resolve_columns(columns, LEGACY_XLSX_COLUMNS)
     wb = Workbook()
     ws = wb.active
     ws.title = "Posiciones"
-    ws.append([label for _, label in POSITION_COLUMNS])
-    _style_header(ws, len(POSITION_COLUMNS))
+    ws.append([c.label for c in cols])
+    _style_header(ws, len(cols))
     for r in rows:
-        ws.append([r.get(key) for key, _ in POSITION_COLUMNS])
-    for idx, (key, _) in enumerate(POSITION_COLUMNS, start=1):
-        fmt = _MONEY if key in _MONEY_COLS else _PCT if key in _PCT_COLS else None
+        ws.append([r.get(c.key) for c in cols])
+    for idx, c in enumerate(cols, start=1):
+        fmt = _XLSX_FORMATS.get(c.kind)
         if fmt:
             for cell in ws[get_column_letter(idx)][1:]:
                 cell.number_format = fmt
     ws.freeze_panes = "A2"
+    if rows:
+        # Tabla de Excel (autofiltro + bandas) lista para análisis / tablas dinámicas.
+        ref = f"A1:{get_column_letter(len(cols))}{len(rows) + 1}"
+        table = XlTable(displayName="Posiciones", ref=ref)
+        table.tableStyleInfo = TableStyleInfo(name="TableStyleLight9", showRowStripes=True)
+        ws.add_table(table)
     _autosize(ws)
 
     info = wb.create_sheet("Info")
     info["A1"] = "Portafolio FSA — Posiciones"
     info["A2"] = _meta_line(meta)
     info["A3"] = f"Total de posiciones exportadas: {len(rows)}"
+    info["A4"] = "Cifras en USD · Tiempo al vencimiento = (vencimiento − fecha de generación) / 365"
+    totals = _column_totals(rows, cols)
+    if totals:
+        info["A6"] = "Totales"
+        info["A6"].font = Font(bold=True)
+        for i, c in enumerate([c for c in cols if c.key in totals], start=7):
+            info.cell(row=i, column=1, value=c.label)
+            cell = info.cell(row=i, column=2, value=totals[c.key])
+            cell.number_format = _XLSX_FORMATS.get(c.kind, _MONEY)
+    _autosize(info, max_width=90)
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -210,8 +229,8 @@ def _breakdown_sheet(wb: Workbook, title: str, rows: list[dict]) -> None:
 def _risk_sheet(wb: Workbook, dash: dict) -> None:
     ws = wb.create_sheet("Riesgo y Alertas")
     for panel, title in (
-        ("calidad_moodys", "Calidad crediticia (Moody's)"),
-        ("calidad_sp", "Calidad crediticia (S&P)"),
+        ("calidad_moodys", "Calidad crediticia (Moody's) — solo bonos, % sobre bonos"),
+        ("calidad_sp", "Calidad crediticia (S&P) — solo bonos, % sobre bonos"),
         ("stop_loss", "Indicador Stop-Loss"),
         ("alerta_tiempo", "Alerta Tiempo (plazo de tenencia)"),
         ("alerta_emisor", "Alerta Emisor (concentración)"),
@@ -296,19 +315,88 @@ def _fmt_pct(v) -> str:
     return "—" if v is None else f"{v * 100:,.2f}%"
 
 
-def positions_to_pdf(rows: list[dict], meta: dict) -> bytes:
+def _fmt_years(v) -> str:
+    return "—" if v is None else f"{v:,.2f}"
+
+
+def _fmt_date(v) -> str:
+    if v is None:
+        return "—"
+    return v.strftime("%d/%m/%Y") if hasattr(v, "strftime") else str(v)
+
+
+def _pdf_cell(col: ReportColumn, r: dict, cell_style):
+    v = r.get(col.key)
+    if col.key == "identifier" and v == r.get("description"):
+        return "—"  # identificador sintético (efectivo / acción sin CUSIP)
+    if col.kind == "money":
+        return _fmt_money(v)
+    if col.kind == "price":
+        return "—" if v is None else f"{v:,.2f}"
+    if col.kind == "number":
+        return "—" if v is None else f"{v:,.2f}".rstrip("0").rstrip(".")
+    if col.kind == "pct":
+        return _fmt_pct(v)
+    if col.kind == "date":
+        return _fmt_date(v)
+    if col.kind == "years":
+        return _fmt_years(v)
+    # Paragraph interpreta marcado: se escapa "&", "<" (p. ej. "M&T", "WR<").
+    return Paragraph(escape(str(v)) if v not in (None, "") else "—", cell_style)
+
+
+class _NumberedCanvas(canvas.Canvas):
+    """Pie de página "Página X de Y" (necesita conocer el total al final)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_pages: list[dict] = []
+
+    def showPage(self):  # noqa: N802 (API de reportlab)
+        self._saved_pages.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        total = len(self._saved_pages)
+        for state in self._saved_pages:
+            self.__dict__.update(state)
+            self._draw_footer(total)
+            super().showPage()
+        super().save()
+
+    def _draw_footer(self, total: int) -> None:
+        w, _h = self._pagesize
+        self.setFont("Helvetica", 7)
+        self.setFillColor(GREY)
+        self.setStrokeColor(BORDER)
+        self.line(10 * mm, 9 * mm, w - 10 * mm, 9 * mm)
+        self.drawString(10 * mm, 6 * mm, "Fundación San Antonio · Portafolio de inversiones internacionales")
+        self.drawRightString(w - 10 * mm, 6 * mm, f"Página {self._pageNumber} de {total}")
+
+
+def positions_to_pdf(
+    rows: list[dict], meta: dict, columns: list[str] | None = None
+) -> bytes:
+    """Informe de posiciones en A4 horizontal con SOLO las columnas
+    seleccionadas (o el formato histórico si no se indica ninguna)."""
+    cols = resolve_columns(columns, LEGACY_PDF_COLUMNS)
     buf = io.BytesIO()
     left_margin = right_margin = 10 * mm
     doc = SimpleDocTemplate(
         buf, pagesize=landscape(A4),
-        leftMargin=left_margin, rightMargin=right_margin, topMargin=12 * mm, bottomMargin=12 * mm,
+        leftMargin=left_margin, rightMargin=right_margin, topMargin=12 * mm, bottomMargin=14 * mm,
         title="Portafolio FSA — Posiciones",
     )
     ss = _pdf_styles()
+    # Con muchas columnas se reduce la letra para que todo quepa en el ancho.
+    font = 7 if len(cols) <= 12 else 6.2 if len(cols) <= 18 else 5.4
     # Celda con ajuste de línea (Paragraph) en vez de truncar texto con [:N]:
     # así ninguna descripción/sector/etiqueta larga queda cortada ni se
     # superpone a la columna vecina; la fila simplemente crece de alto.
-    cell_style = ParagraphStyle("FSACell", parent=ss["Normal"], fontSize=7, leading=8.5)
+    cell_style = ParagraphStyle("FSACell", parent=ss["Normal"], fontSize=font, leading=font + 1.5)
+    head_style = ParagraphStyle(
+        "FSAHead", parent=cell_style, textColor=colors.white, fontName="Helvetica-Bold"
+    )
     story = []
     logo = _logo_flowable()
     if logo is not None:
@@ -318,41 +406,48 @@ def positions_to_pdf(rows: list[dict], meta: dict) -> bytes:
         Paragraph(_meta_line(meta), ss["FSAMeta"]),
         Spacer(1, 6),
     ]
-    head = ["Descripción", "CUSIP", "Clas.", "Tipo", "Sector", "Costo", "V. Mercado",
-            "G/(P)", "Rent.", "Stop-Loss", "Moody's"]
-    data = [head]
+    numeric = {"money", "price", "number", "pct", "years"}
+    data = [[Paragraph(escape(c.short), head_style) for c in cols]]
     for r in rows:
-        data.append([
-            Paragraph(r.get("description") or "", cell_style),
-            "—" if r.get("identifier") == r.get("description")
-            else Paragraph(r.get("identifier") or "", cell_style),
-            Paragraph(r.get("classification") or "", cell_style),
-            r.get("type") or "",
-            Paragraph(r.get("sector") or "", cell_style),
-            _fmt_money(r.get("cost_basis")),
-            _fmt_money(r.get("market_value")),
-            _fmt_money(r.get("unrealized_gain_loss")),
-            _fmt_pct(r.get("return_on_cost")),
-            Paragraph(r.get("stop_loss") or "", cell_style),
-            Paragraph(r.get("moodys_grade") or "", cell_style),
-        ])
-    # Anchos proporcionales al ancho disponible real de la página (auto-fit):
-    # antes eran mm fijos que sumaban más que el área imprimible en A4
-    # horizontal y la última columna quedaba cortada fuera de la hoja.
+        data.append([_pdf_cell(c, r, cell_style) for c in cols])
+
+    totals = _column_totals(rows, cols)
+    if totals and rows:
+        tot_row = []
+        for i, c in enumerate(cols):
+            if c.key in totals:
+                tot_row.append(_fmt_pct(totals[c.key]) if c.kind == "pct" else _fmt_money(totals[c.key]))
+            else:
+                tot_row.append(Paragraph(f"<b>Totales · {len(rows)}</b>", cell_style) if i == 0 else "")
+        data.append(tot_row)
+
+    # Anchos proporcionales al ancho disponible real de la página (auto-fit).
     avail_width = landscape(A4)[0] - left_margin - right_margin
-    weights = [0.20, 0.09, 0.08, 0.06, 0.12, 0.08, 0.09, 0.08, 0.06, 0.10, 0.04]
-    col_widths = [avail_width * w for w in weights]
+    weight_sum = sum(c.pdf_weight for c in cols)
+    col_widths = [avail_width * c.pdf_weight / weight_sum for c in cols]
     t = Table(data, repeatRows=1, colWidths=col_widths)
     tstyle = _base_table_style()
-    tstyle.add("ALIGN", (5, 1), (8, -1), "RIGHT")
-    for i, r in enumerate(rows, start=1):
-        gl = r.get("unrealized_gain_loss") or 0
-        tstyle.add("TEXTCOLOR", (7, i), (7, i), GREEN if gl >= 0 else RED)
+    tstyle.add("FONTSIZE", (0, 0), (-1, -1), font)
+    for j, c in enumerate(cols):
+        if c.kind in numeric or c.kind == "date":
+            tstyle.add("ALIGN", (j, 1), (j, -1), "RIGHT")
+        if c.key == "unrealized_gain_loss":
+            for i, r in enumerate(rows, start=1):
+                gl = r.get("unrealized_gain_loss") or 0
+                tstyle.add("TEXTCOLOR", (j, i), (j, i), GREEN if gl >= 0 else RED)
+    if totals and rows:
+        tstyle.add("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E8ECF1"))
+        tstyle.add("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold")
+        tstyle.add("LINEABOVE", (0, -1), (-1, -1), 0.8, NAVY)
     t.setStyle(tstyle)
     story.append(t)
     story.append(Spacer(1, 6))
-    story.append(Paragraph(f"{len(rows)} posiciones · cifras en USD", ss["FSAMeta"]))
-    doc.build(story)
+    story.append(Paragraph(
+        f"{len(rows)} posiciones · cifras en USD · tiempo al vencimiento = "
+        "(fecha de vencimiento − fecha de generación) / 365",
+        ss["FSAMeta"],
+    ))
+    doc.build(story, canvasmaker=_NumberedCanvas)
     return buf.getvalue()
 
 
@@ -441,8 +536,8 @@ def _breakdown_pdf_table(rows: list[dict]) -> Table:
 def _risk_pdf_table(dash: dict) -> Table:
     data = [["Panel", "Categoría", "Pos.", "Valor de Mercado", "% Total"]]
     for panel, title in (
-        ("calidad_moodys", "Moody's"),
-        ("calidad_sp", "S&P"),
+        ("calidad_moodys", "Moody's (bonos)"),
+        ("calidad_sp", "S&P (bonos)"),
         ("stop_loss", "Stop-Loss"),
         ("alerta_tiempo", "Alerta Tiempo"),
         ("alerta_emisor", "Alerta Emisor"),

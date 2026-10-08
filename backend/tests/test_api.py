@@ -404,6 +404,92 @@ def test_export_respects_filters(client, admin_token):
     assert len(filt.content) < len(full.content)
 
 
+def test_export_respects_selected_columns(client, admin_token):
+    import io
+
+    from openpyxl import load_workbook
+
+    cols = client.get("/api/export/positions/columns", headers=auth(admin_token)).json()
+    keys = {c["key"] for c in cols}
+    assert {"description", "maturity_date", "time_to_maturity_years", "moodys_grade"} <= keys
+
+    r = client.get(
+        "/api/export/positions.xlsx?year=2026&month=Agosto"
+        "&columns=description&columns=maturity_date&columns=time_to_maturity_years",
+        headers=auth(admin_token),
+    )
+    assert r.status_code == 200
+    ws = load_workbook(io.BytesIO(r.content))["Posiciones"]
+    header = [c.value for c in ws[1]]
+    assert header == ["Emisor / Descripción", "Fecha de vencimiento",
+                      "Tiempo al vencimiento (años)"]
+    assert ws.max_row == 64                                  # encabezado + 63 posiciones
+
+    pdf_small = client.get(
+        "/api/export/positions.pdf?year=2026&month=Agosto&columns=description",
+        headers=auth(admin_token),
+    )
+    pdf_big = client.get(
+        "/api/export/positions.pdf?year=2026&month=Agosto"
+        + "".join(f"&columns={k}" for k in keys),
+        headers=auth(admin_token),
+    )
+    assert pdf_small.status_code == pdf_big.status_code == 200
+    assert len(pdf_small.content) < len(pdf_big.content)
+
+
+def test_credit_kpis_only_bonds_api(client, admin_token):
+    d = client.get(
+        "/api/portfolio/dashboard?year=2026&month=Agosto", headers=auth(admin_token)
+    ).json()
+    pos = client.get(
+        "/api/positions?year=2026&month=Agosto&type=Bond&page_size=500",
+        headers=auth(admin_token),
+    ).json()
+    n_bonds = pos["totals"]["n_posiciones"]
+    assert n_bonds == 40
+    assert d["calidad_universo"]["posiciones"] == n_bonds
+    for panel in ("calidad_moodys", "calidad_sp"):
+        assert sum(r["posiciones"] for r in d[panel]) == n_bonds     # no 63
+    # las acciones no tienen KPI crediticio
+    eq = client.get(
+        "/api/positions?year=2026&month=Agosto&type=Equity&page_size=500",
+        headers=auth(admin_token),
+    ).json()["items"]
+    assert eq and all(i["moodys_grade"] == i["sp_grade"] == "N/A" for i in eq)
+
+
+def test_alert_detail_endpoint(client, lector_token):
+    params = {"year": 2026, "month": "Agosto", "as_of": "2026-10-08"}
+    d = client.get("/api/portfolio/dashboard", params=params,
+                   headers=auth(lector_token)).json()
+    ra = d["risk_alerts"]
+
+    venc = client.get("/api/portfolio/alerts/detail",
+                      params={**params, "alert": "vencimientos_1a"},
+                      headers=auth(lector_token)).json()
+    assert venc["summary"]["posiciones"] == ra["vencimientos_1a_posiciones"] == 2
+    assert all(i["time_to_maturity_years"] < 1 for i in venc["items"])
+
+    plazo = client.get("/api/portfolio/alerts/detail",
+                       params={**params, "alert": "plazo_prom_vencimiento"},
+                       headers=auth(lector_token)).json()
+    assert plazo["summary"]["plazo_promedio_anios"] == pytest.approx(
+        ra["plazo_prom_vencimiento_bonos"])
+    assert all(i["type"] == "Bond" for i in plazo["items"])
+
+    # paneles: misma cifra que la tarjeta
+    for row in d["alerta_emisor"]:
+        det = client.get("/api/portfolio/alerts/detail",
+                         params={**params, "alert": "alerta_emisor", "label": row["label"]},
+                         headers=auth(lector_token)).json()
+        assert det["summary"]["posiciones"] == row["posiciones"]
+
+    bad = client.get("/api/portfolio/alerts/detail", params={"alert": "nope"},
+                     headers=auth(lector_token))
+    assert bad.status_code == 400
+
+
 def test_export_requires_auth(client):
     assert client.get("/api/export/dashboard.xlsx").status_code == 401
 
