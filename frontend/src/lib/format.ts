@@ -73,3 +73,20 @@ export const fmtDate = (iso: string | null | undefined) => {
   const [y, m, d] = iso.slice(0, 10).split("-");
   return y && m && d ? `${d}/${m}/${y}` : iso;
 };
+
+/** COP compacto para ejes y tarjetas: 8,7 mil M · 776 M · 3,1 M */
+export const fmtCOPCompact = (v: number) => {
+  const abs = Math.abs(v);
+  const n1 = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 1 });
+  if (abs >= 1_000_000_000) return `${n1.format(v / 1_000_000_000)} mil M`;
+  if (abs >= 1_000_000) return `${n1.format(v / 1_000_000)} M`;
+  if (abs >= 1_000) return `${n1.format(v / 1_000)} k`;
+  return n1.format(v);
+};
+
+/** Puntos porcentuales con signo: +2,4 pp */
+export const fmtPP = (v: number | null | undefined) => {
+  if (v == null || Number.isNaN(v)) return "—";
+  const n = new Intl.NumberFormat("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return `${v >= 0 ? "+" : ""}${n.format(v * 100)} pp`;
+};

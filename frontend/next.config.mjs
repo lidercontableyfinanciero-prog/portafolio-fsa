@@ -16,7 +16,17 @@ const nextConfig = {
   },
   async redirects() {
     // La antigua sección "Datos" se dividió en "Importar" + "Posiciones".
-    return [{ source: "/datos", destination: "/posiciones", permanent: false }];
+    // El Portafolio Internacional ahora vive en /internacional/* (la raíz "/" es la
+    // pantalla principal de módulos): se conservan los enlaces antiguos.
+    const moved = ["historico", "rentabilidad", "escenarios", "simulador-fx", "posiciones", "importar"];
+    return [
+      { source: "/datos", destination: "/internacional/posiciones", permanent: false },
+      ...moved.map((p) => ({
+        source: `/${p}`,
+        destination: `/internacional/${p}`,
+        permanent: false,
+      })),
+    ];
   },
 };
 

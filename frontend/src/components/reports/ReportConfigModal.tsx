@@ -18,11 +18,9 @@ import { fetchBlob, saveBlob } from "@/lib/api";
 import { useReportColumns } from "@/lib/reportColumns";
 import type { ReportColumn } from "@/lib/types";
 
-const STORAGE_KEY = "fsa_report_columns";
-
-function loadSaved(): string[] | null {
+function loadSaved(storageKey: string): string[] | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     const v = raw ? JSON.parse(raw) : null;
     return Array.isArray(v) ? v.filter((x) => typeof x === "string") : null;
   } catch {
@@ -30,9 +28,9 @@ function loadSaved(): string[] | null {
   }
 }
 
-function save(keys: string[]) {
+function save(storageKey: string, keys: string[]) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(keys));
+    localStorage.setItem(storageKey, JSON.stringify(keys));
   } catch {
     /* almacenamiento no disponible: la selección vive solo en esta sesión */
   }
@@ -45,13 +43,23 @@ export function ReportConfigModal({
   open,
   onClose,
   query,
+  columnsEndpoint = "/export/positions/columns",
+  exportBase = "/export/positions",
+  storageKey = "fsa_report_columns",
+  title = "Configurar reporte de posiciones",
 }: {
   open: boolean;
   onClose: () => void;
   /** Filtros activos (query string sin "?"), los mismos de la vista. */
   query: string;
+  /** catálogo de columnas del portafolio (internacional por defecto) */
+  columnsEndpoint?: string;
+  /** ruta de exportación sin extensión */
+  exportBase?: string;
+  storageKey?: string;
+  title?: string;
 }) {
-  const { columns, error: colsError, isLoading } = useReportColumns();
+  const { columns, error: colsError, isLoading } = useReportColumns(columnsEndpoint);
   const [selected, setSelected] = useState<string[] | null>(null);
   const [step, setStep] = useState<"config" | "preview">("config");
   const [busy, setBusy] = useState<"xlsx" | "pdf" | "preview" | null>(null);
@@ -66,9 +74,9 @@ export function ReportConfigModal({
   useEffect(() => {
     if (!columns.length || selected) return;
     const known = new Set(columns.map((c) => c.key));
-    const saved = loadSaved()?.filter((k) => known.has(k as ReportColumn["key"]));
+    const saved = loadSaved(storageKey)?.filter((k) => known.has(k as ReportColumn["key"]));
     setSelected(saved && saved.length ? saved : defaults);
-  }, [columns, defaults, selected]);
+  }, [columns, defaults, selected, storageKey]);
 
   // Libera la URL de la vista previa al reemplazarla o cerrar.
   useEffect(() => {
@@ -86,7 +94,7 @@ export function ReportConfigModal({
 
   function update(keys: string[]) {
     setSelected(keys);
-    save(keys);
+    save(storageKey, keys);
     setPreview(null);
   }
 
@@ -98,7 +106,7 @@ export function ReportConfigModal({
     const p = new URLSearchParams(query);
     // en el orden del catálogo = orden de las columnas en el archivo
     for (const c of columns) if (chosen.has(c.key)) p.append("columns", c.key);
-    return `/export/positions.${ext}?${p.toString()}`;
+    return `${exportBase}.${ext}?${p.toString()}`;
   }
 
   async function run(kind: "xlsx" | "pdf" | "preview") {
@@ -173,7 +181,7 @@ export function ReportConfigModal({
       open={open}
       onClose={close}
       size={step === "preview" ? "xl" : "lg"}
-      title={step === "config" ? "Configurar reporte de posiciones" : "Vista previa del PDF"}
+      title={step === "config" ? title : "Vista previa del PDF"}
       subtitle={
         step === "config"
           ? "Selecciona las columnas a incluir. Se aplican los filtros y el período activos."

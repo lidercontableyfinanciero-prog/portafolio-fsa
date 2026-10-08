@@ -113,12 +113,22 @@ def _column_totals(rows: list[dict], columns: list[ReportColumn]) -> dict[str, f
     return totals
 
 
+_INTL_NOTE = "Cifras en USD · Tiempo al vencimiento = (vencimiento − fecha de generación) / 365"
+
+
 def positions_to_xlsx(
-    rows: list[dict], meta: dict, columns: list[str] | None = None
+    rows: list[dict],
+    meta: dict,
+    columns: list[str] | None = None,
+    *,
+    catalog_cols: list[ReportColumn] | None = None,
+    fallback: list[str] | None = None,
+    title: str = "Portafolio FSA — Posiciones",
+    note: str = _INTL_NOTE,
 ) -> bytes:
     """Hoja "Posiciones" con SOLO las columnas seleccionadas (o el formato
     histórico si no se indica ninguna), como tabla de Excel con filtros."""
-    cols = resolve_columns(columns, LEGACY_XLSX_COLUMNS)
+    cols = resolve_columns(columns, fallback or LEGACY_XLSX_COLUMNS, catalog_cols)
     wb = Workbook()
     ws = wb.active
     ws.title = "Posiciones"
@@ -141,10 +151,10 @@ def positions_to_xlsx(
     _autosize(ws)
 
     info = wb.create_sheet("Info")
-    info["A1"] = "Portafolio FSA — Posiciones"
+    info["A1"] = title
     info["A2"] = _meta_line(meta)
     info["A3"] = f"Total de posiciones exportadas: {len(rows)}"
-    info["A4"] = "Cifras en USD · Tiempo al vencimiento = (vencimiento − fecha de generación) / 365"
+    info["A4"] = note
     totals = _column_totals(rows, cols)
     if totals:
         info["A6"] = "Totales"
@@ -375,17 +385,25 @@ class _NumberedCanvas(canvas.Canvas):
 
 
 def positions_to_pdf(
-    rows: list[dict], meta: dict, columns: list[str] | None = None
+    rows: list[dict],
+    meta: dict,
+    columns: list[str] | None = None,
+    *,
+    catalog_cols: list[ReportColumn] | None = None,
+    fallback: list[str] | None = None,
+    title: str = "Portafolio FSA — Posiciones",
+    note: str = "cifras en USD · tiempo al vencimiento = "
+                "(fecha de vencimiento − fecha de generación) / 365",
 ) -> bytes:
     """Informe de posiciones en A4 horizontal con SOLO las columnas
     seleccionadas (o el formato histórico si no se indica ninguna)."""
-    cols = resolve_columns(columns, LEGACY_PDF_COLUMNS)
+    cols = resolve_columns(columns, fallback or LEGACY_PDF_COLUMNS, catalog_cols)
     buf = io.BytesIO()
     left_margin = right_margin = 10 * mm
     doc = SimpleDocTemplate(
         buf, pagesize=landscape(A4),
         leftMargin=left_margin, rightMargin=right_margin, topMargin=12 * mm, bottomMargin=14 * mm,
-        title="Portafolio FSA — Posiciones",
+        title=title,
     )
     ss = _pdf_styles()
     # Con muchas columnas se reduce la letra para que todo quepa en el ancho.
@@ -402,7 +420,7 @@ def positions_to_pdf(
     if logo is not None:
         story += [logo, Spacer(1, 4)]
     story += [
-        Paragraph("Portafolio FSA — Posiciones", ss["FSATitle"]),
+        Paragraph(escape(title), ss["FSATitle"]),
         Paragraph(_meta_line(meta), ss["FSAMeta"]),
         Spacer(1, 6),
     ]
@@ -443,8 +461,7 @@ def positions_to_pdf(
     story.append(t)
     story.append(Spacer(1, 6))
     story.append(Paragraph(
-        f"{len(rows)} posiciones · cifras en USD · tiempo al vencimiento = "
-        "(fecha de vencimiento − fecha de generación) / 365",
+        f"{len(rows)} posiciones · {note}",
         ss["FSAMeta"],
     ))
     doc.build(story, canvasmaker=_NumberedCanvas)

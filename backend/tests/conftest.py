@@ -54,6 +54,15 @@ def seeded_db(_engine):
         parsed = parse_upload(raw, xlsx.name)
         counts = repo.upsert_parsed_rows(db, parsed.rows)
         repo.recompute_monthly_returns(db)
+
+        from app.services import national_repo
+        from app.services.national_etl import parse_national
+
+        national_repo.seed_reference_data(db)
+        nal = settings.seed_dir_path / settings.seed_national_file
+        if nal.exists():
+            parsed_nal = parse_national(nal.read_bytes(), nal.name)
+            national_repo.replace_periods(db, parsed_nal.movements, parsed_nal.periods)
         db.add(
             IngestionLog(
                 filename=xlsx.name,

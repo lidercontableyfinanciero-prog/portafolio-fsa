@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     seed_data_dir: str = "../Referencias"
     seed_informe_file: str = "1. INFORME INVERSIONES INTERNACIONALES FSA 2026 (2).xlsx"
     seed_dashboard_file: str = "2. DASHBOARD INVERSIONES INTERNACIONALES FSA 2026 (1).xlsx"
+    seed_national_file: str = "Base de Datos Portafolio Inversiones Nacionales.xlsx"
     seed_admin_username: str = "ADMIN_FSA"
     seed_admin_password: str = "admin123"
     seed_lector1_username: str = "LECTOR1_FSA"

@@ -44,6 +44,26 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+def require_module(module: str):
+    """Perfil de acceso por módulo ("international" / "national"). Se valida en
+    el backend: ocultar el módulo en la interfaz no basta."""
+    labels = {"international": "Portafolio Internacional", "national": "Portafolio Nacional"}
+
+    def _dep(user: User = Depends(get_current_user)) -> User:
+        if not user.can_view(module):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"No tienes acceso al módulo {labels.get(module, module)}.",
+            )
+        return user
+
+    return _dep
+
+
+require_international = require_module("international")
+require_national = require_module("national")
+
+
 def require_upload_permission(user: User = Depends(get_current_user)) -> User:
     """Admin siempre puede cargar; un lector solo si el admin le otorgó
     `can_upload` desde Seguridad/Privacidad."""

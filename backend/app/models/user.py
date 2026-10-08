@@ -32,3 +32,19 @@ class User(TimestampMixin, Base):
     # el admin. El rol admin siempre puede cargar independientemente de este
     # valor (ver `app.api.deps.require_upload_permission`).
     can_upload: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Módulos que el usuario puede consultar (perfil de acceso). El rol admin
+    # accede siempre a todos (ver `app.api.deps.require_module`).
+    can_view_international: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true", nullable=False
+    )
+    can_view_national: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true", nullable=False
+    )
+
+    def can_view(self, module: str) -> bool:
+        if self.role == UserRole.admin:
+            return True
+        return {
+            "international": self.can_view_international,
+            "national": self.can_view_national,
+        }.get(module, False)

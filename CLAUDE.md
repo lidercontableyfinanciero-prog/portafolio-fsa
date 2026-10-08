@@ -1,13 +1,30 @@
 # CLAUDE.md — Portafolio FSA
 
-SPA de gestión y análisis del portafolio de inversiones internacionales de la
-**Fundación San Antonio**. Ingeniería inversa de dos libros Excel (`Referencias/`).
+SPA de gestión y análisis de los portafolios de inversiones de la **Fundación San
+Antonio**: **Internacional** (USD) y **Nacional** (COP), más **Seguridad**. Ingeniería
+inversa de los libros Excel de `Referencias/`.
+
+Rutas: `/` pantalla principal (módulos + marquesina) · `/internacional/*` ·
+`/nacional/*` · `/seguridad`. Las URL antiguas (`/historico`, `/posiciones`…) redirigen.
 
 ## Arquitectura
 
 - `backend/` — FastAPI + SQLAlchemy 2 + Alembic + PostgreSQL. Auth JWT, roles `admin`/`lector`.
 - `frontend/` — Next.js 14 (App Router, TS) + Tailwind + Recharts + TanStack Table + SWR + Framer Motion.
-- `docs/` — diccionario de datos, lógica financiera, tokens de diseño.
+- `docs/` — diccionario de datos, lógica financiera (`FINANCIAL_LOGIC.md` internacional,
+  `NATIONAL_LOGIC.md` nacional), tokens de diseño.
+- **Permisos**: rol admin/lector + por usuario `can_upload`, `can_view_international`,
+  `can_view_national`. Se validan en el backend (`deps.require_module`): todas las rutas
+  internacionales exigen `international`, `/api/national/*` exige `national`.
+
+## Portafolio Nacional
+- Motor puro `services/national.py` (fuente única: dashboard, posiciones, alertas y
+  reportes leen `GET /api/national/report`). Datos aislados en tablas `national_*`;
+  parámetros con prefijo `nal_`; `ingestion_logs.portfolio = "national"`.
+- Catálogo de activos, IPC y umbrales sembrados desde el Excel (`db/national_seed_data.py`),
+  editables por el admin. Importador rechaza el archivo completo si hay errores.
+- Cifras de referencia (corte ago‑2026): valor 8 710 191 750,48 · rent. E.A. 8,8426 % ·
+  benchmark 10,294 % · 6 en riesgo / 2 seguimiento / 3 sobresalientes / 2 normales / 2 cerradas.
 
 ## Reglas del dominio (no romper)
 
@@ -27,7 +44,7 @@ SPA de gestión y análisis del portafolio de inversiones internacionales de la
 
 ```bash
 # backend
-cd backend && .venv/Scripts/python.exe -m pytest -q          # 58 pruebas (unit + API + ETL + export)
+cd backend && .venv/Scripts/python.exe -m pytest -q          # 73 pruebas (unit + API + ETL + export + nacional + seguridad)
 cd backend && .venv/Scripts/python.exe scripts/smoke_pipeline.py   # E2E sin Postgres (SQLite)
 cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload
 

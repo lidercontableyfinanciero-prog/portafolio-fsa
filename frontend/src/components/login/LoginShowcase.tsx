@@ -54,8 +54,8 @@ export function LoginShowcase() {
           Transformamos vidas a través del amor, la educación y las oportunidades.
         </p>
         <p className="mt-4 text-sm leading-relaxed text-white/60">
-          Plataforma de gestión y análisis del portafolio de inversiones
-          internacionales.
+          Plataforma de gestión y análisis de los portafolios de inversiones
+          nacionales e internacionales.
         </p>
       </motion.div>
 

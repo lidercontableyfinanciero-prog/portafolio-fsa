@@ -11,13 +11,15 @@ import {
 } from "react";
 
 import { api, tokenStore } from "@/lib/api";
-import type { User } from "@/lib/types";
+import type { ModuleKey, User } from "@/lib/types";
 
 interface AuthState {
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
   canUpload: boolean;
+  /** Perfil de acceso por módulo (el admin ve todos). El backend lo valida igual. */
+  canView: (module: ModuleKey) => boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -72,6 +74,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       isAdmin: user?.role === "admin",
       canUpload: user?.role === "admin" || user?.can_upload === true,
+      canView: (module: ModuleKey) =>
+        user?.role === "admin" ||
+        (module === "international"
+          ? user?.can_view_international === true
+          : user?.can_view_national === true),
       login,
       logout,
     }),

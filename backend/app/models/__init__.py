@@ -6,6 +6,7 @@ from app.models.fx import FxScenario
 from app.models.ingestion_log import IngestionLog, IngestionStatus
 from app.models.instrument import Instrument
 from app.models.monthly_return import MonthlyReturn
+from app.models.national import NationalAsset, NationalIpc, NationalMovement
 from app.models.parameter import Parameter, RatingScale, SectorLimit
 from app.models.snapshot import PositionSnapshot
 from app.models.user import User
@@ -18,6 +19,9 @@ __all__ = [
     "IngestionStatus",
     "Instrument",
     "MonthlyReturn",
+    "NationalAsset",
+    "NationalIpc",
+    "NationalMovement",
     "Parameter",
     "RatingScale",
     "SectorLimit",

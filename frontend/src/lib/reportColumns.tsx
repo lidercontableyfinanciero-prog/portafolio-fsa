@@ -10,9 +10,9 @@ import type { PositionRow, ReportColumn } from "@/lib/types";
 
 /** Catálogo único de columnas (backend `report_columns.py`): lo usan
  * "Configurar reporte", las exportaciones y las ventanas de alertas. */
-export function useReportColumns() {
+export function useReportColumns(endpoint = "/export/positions/columns") {
   const { data, error, isLoading } = useSWR<ReportColumn[]>(
-    "/export/positions/columns",
+    endpoint,
     fetcher,
     { revalidateOnFocus: false },
   );
@@ -27,7 +27,7 @@ const alertColor = (v: string) => (v === "OK" ? FSA.green : FSA.orange);
 
 /** Valor de una celda de posición formateado según el tipo de la columna. */
 export function renderPositionCell(c: ReportColumn, row: PositionRow): React.ReactNode {
-  const v = row[c.key] as unknown;
+  const v = (row as unknown as Record<string, unknown>)[c.key];
   if (c.key === "identifier" && v === row.description) {
     return <span className="text-fsa-muted">—</span>; // identificador sintético
   }

@@ -19,7 +19,7 @@ _MAX_BYTES = 25 * 1024 * 1024
 
 
 def _log(db: Session, **kw) -> IngestionLog:
-    entry = IngestionLog(**kw)
+    entry = IngestionLog(portfolio="international", **kw)
     db.add(entry)
     db.flush()
     return entry
@@ -92,6 +92,7 @@ async def upload(
         select(IngestionLog)
         .where(
             IngestionLog.content_sha256 == sha,
+            IngestionLog.portfolio == "international",
             IngestionLog.status.in_([IngestionStatus.success, IngestionStatus.partial]),
         )
         .order_by(IngestionLog.created_at.desc())
@@ -191,7 +192,11 @@ def history(
     offset: int = Query(0, ge=0),
     include_dry_run: bool = Query(False),
 ):
-    stmt = select(IngestionLog).order_by(IngestionLog.created_at.desc())
+    stmt = (
+        select(IngestionLog)
+        .where(IngestionLog.portfolio == "international")
+        .order_by(IngestionLog.created_at.desc())
+    )
     if not include_dry_run:
         stmt = stmt.where(IngestionLog.status != IngestionStatus.dry_run)
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))

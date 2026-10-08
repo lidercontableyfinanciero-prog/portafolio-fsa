@@ -25,6 +25,11 @@ class IngestionLog(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
 
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    # "international" | "national": cada portafolio tiene su propio histórico.
+    portfolio: Mapped[str] = mapped_column(
+        String(16), default="international", server_default="international",
+        nullable=False, index=True,
+    )
     content_sha256: Mapped[str | None] = mapped_column(String(64), index=True)
 
     uploaded_by_id: Mapped[int | None] = mapped_column(

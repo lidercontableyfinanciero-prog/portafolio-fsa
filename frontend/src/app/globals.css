@@ -105,3 +105,23 @@ body {
     background: #fff !important;
   }
 }
+
+/* --- Marquesina de logos (pantalla principal) --- */
+@keyframes fsa-marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+.fsa-marquee-track {
+  animation: fsa-marquee 38s linear infinite;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fsa-marquee-track {
+    animation: fsa-marquee 120s linear infinite !important;
+    animation-iteration-count: infinite !important;
+  }
+}

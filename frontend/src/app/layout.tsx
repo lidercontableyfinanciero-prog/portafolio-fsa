@@ -18,9 +18,9 @@ const openSans = Open_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Portafolio FSA — Inversiones Internacionales",
+  title: "Portafolio FSA — Gestión de Inversiones",
   description:
-    "Gestión y análisis del portafolio de inversiones internacionales de la Fundación San Antonio.",
+    "Gestión y análisis de los portafolios de inversiones nacionales e internacionales de la Fundación San Antonio.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

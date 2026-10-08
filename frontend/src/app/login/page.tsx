@@ -57,7 +57,7 @@ export default function LoginPage() {
             </span>
             <div>
               <h1 className="font-display text-lg font-600 text-fsa-navy">Portafolio FSA</h1>
-              <p className="text-xs text-fsa-muted">Inversiones Internacionales</p>
+              <p className="text-xs text-fsa-muted">Gestión de inversiones</p>
             </div>
           </div>
 

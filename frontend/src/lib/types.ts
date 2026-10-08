@@ -7,7 +7,11 @@ export interface User {
   role: Role;
   is_active: boolean;
   can_upload: boolean;
+  can_view_international: boolean;
+  can_view_national: boolean;
 }
+
+export type ModuleKey = "international" | "national";
 
 export interface Period {
   year: number;
@@ -346,7 +350,7 @@ export type ReportColumnKind = "text" | "money" | "price" | "pct" | "date" | "ye
 
 /** Columna del catálogo único de reportes (`GET /export/positions/columns`). */
 export interface ReportColumn {
-  key: keyof PositionRow & string;
+  key: string;
   label: string;
   short: string;
   kind: ReportColumnKind;

@@ -17,6 +17,8 @@ class UserOut(BaseModel):
     role: UserRole
     is_active: bool
     can_upload: bool
+    can_view_international: bool
+    can_view_national: bool
 
     model_config = {"from_attributes": True}
 

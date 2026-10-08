@@ -29,12 +29,15 @@ const tooltipStyle = {
 };
 
 type WithHeight = { height?: number };
+/** Formato de montos (por defecto USD; el portafolio nacional usa COP). */
+type MoneyFmt = { money?: (v: number) => string; compact?: (v: number) => string };
 
 /* --------------------------------- Donut ---------------------------------- */
 export function DonutChart({
   data,
   height = 240,
-}: { data: { name: string; value: number }[] } & WithHeight) {
+  money = fmtUSD,
+}: { data: { name: string; value: number }[] } & WithHeight & MoneyFmt) {
   const total = data.reduce((s, d) => s + d.value, 0) || 1;
   const withPct = data.map((d, i) => ({
     ...d,
@@ -69,7 +72,7 @@ export function DonutChart({
             <Tooltip
               contentStyle={tooltipStyle}
               formatter={(v: number) => [
-                `${fmtUSD(v)} (${((v / total) * 100).toFixed(1)}%)`,
+                `${money(v)} (${((v / total) * 100).toFixed(1)}%)`,
                 "",
               ]}
             />
@@ -99,10 +102,12 @@ export function CategoryBars({
   data,
   layout = "vertical",
   height = 240,
+  money = fmtUSD,
+  compact = fmtCompact,
 }: {
   data: { name: string; value: number }[];
   layout?: "vertical" | "horizontal";
-} & WithHeight) {
+} & WithHeight & MoneyFmt) {
   const horizontal = layout === "horizontal";
   const shortName = (s: string) => (s.length > 16 ? `${s.slice(0, 15)}…` : s);
   return (
@@ -124,7 +129,7 @@ export function CategoryBars({
             <XAxis
               type="number"
               tick={axis}
-              tickFormatter={fmtCompact}
+              tickFormatter={compact}
               domain={[0, "dataMax"]}
             />
             <YAxis
@@ -147,10 +152,10 @@ export function CategoryBars({
               textAnchor="end"
               height={70}
             />
-            <YAxis tick={axis} tickFormatter={fmtCompact} width={44} />
+            <YAxis tick={axis} tickFormatter={compact} width={compact === fmtCompact ? 44 : 64} />
           </>
         )}
-        <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => fmtUSD(v)} cursor={{ fill: "#0000000a" }} />
+        <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => money(v)} cursor={{ fill: "#0000000a" }} />
         <Bar dataKey="value" radius={horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]} maxBarSize={horizontal ? 22 : 56}>
           {data.map((_, i) => (
             <Cell key={i} fill={CATEGORICAL[i % CATEGORICAL.length]} />
@@ -191,12 +196,14 @@ export function TrendLines({
   height = 240,
   yDomain,
   yPercent = false,
+  money = fmtUSD,
+  compact = fmtCompact,
 }: {
-  data: Record<string, number | string>[];
+  data: Record<string, number | string | null>[];
   series: { key: string; name: string; color: string; dashed?: boolean }[];
   yDomain?: [number | string, number | string];
   yPercent?: boolean;
-} & WithHeight) {
+} & WithHeight & MoneyFmt) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={{ top: 8, right: 18, bottom: 18, left: 4 }}>
@@ -211,13 +218,13 @@ export function TrendLines({
         />
         <YAxis
           tick={axis}
-          width={48}
+          width={compact === fmtCompact ? 48 : 64}
           domain={yDomain ?? [0, "auto"]}
-          tickFormatter={(v) => (yPercent ? `${Number(v).toFixed(1)}%` : fmtCompact(Number(v)))}
+          tickFormatter={(v) => (yPercent ? `${Number(v).toFixed(1)}%` : compact(Number(v)))}
         />
         <Tooltip
           contentStyle={tooltipStyle}
-          formatter={(v: number) => (yPercent ? `${Number(v).toFixed(2)}%` : fmtUSD(v))}
+          formatter={(v: number) => (yPercent ? `${Number(v).toFixed(2)}%` : money(v))}
         />
         <Legend wrapperStyle={{ fontSize: 11 }} />
         {series.map((s) => (

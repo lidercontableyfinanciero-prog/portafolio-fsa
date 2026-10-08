@@ -17,6 +17,7 @@ from app.db.rating_scale_data import PARAMETERS, RATING_SCALE
 from app.models.parameter import Parameter, RatingScale
 from app.models.snapshot import PositionSnapshot
 from app.models.user import User, UserRole
+from app.services import national_repo
 from app.services import portfolio_repo as repo
 from app.services.etl import parse_upload
 from app.core.security import hash_password
@@ -105,6 +106,26 @@ def _seed_data_from_excel(db) -> None:
     )
 
 
+def _seed_national(db) -> None:
+    """Catálogo/IPC/parámetros nacionales + la base de movimientos de
+    `Referencias/` si el portafolio nacional aún no tiene datos."""
+    from app.services.national_etl import parse_national
+
+    n = national_repo.seed_reference_data(db)
+    db.commit()
+    print(f"  nacional: {n['assets']} activos · {n['ipc']} meses IPC · {n['parameters']} parámetros")
+    path = settings.seed_dir_path / settings.seed_national_file
+    if not path.exists() or national_repo.has_data(db):
+        return
+    parsed = parse_national(path.read_bytes(), path.name)
+    if not parsed.ok:
+        print(f"  (!) base nacional con errores, se omite: {parsed.errors[:3]}")
+        return
+    counts = national_repo.replace_periods(db, parsed.movements, parsed.periods)
+    db.commit()
+    print(f"  nacional: {counts['inserted']} movimientos cargados")
+
+
 def _seed_benchmarks(db) -> None:
     n = repo.ensure_default_benchmarks(db)
     db.commit()
@@ -123,6 +144,7 @@ def init_db() -> None:
     with SessionLocal() as db:
         _seed_users(db)
         _seed_parameters(db)
+        national_repo.seed_reference_data(db)
         n = repo.ensure_default_benchmarks(db)
         if n:
             print(f"  benchmarks: {n} meses nuevos con tasa anual por defecto")
@@ -137,6 +159,7 @@ def main() -> None:
         _seed_users(db)
         _seed_parameters(db)
         _seed_data_from_excel(db)
+        _seed_national(db)
         _seed_benchmarks(db)
         n = repo.recompute_monthly_returns(db)
         db.commit()
