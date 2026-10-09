@@ -30,7 +30,12 @@ async def lifespan(_app: FastAPI):
     Todo va envuelto en try/except para que un fallo de infraestructura
     (BD dormida, permisos, etc.) no impida levantar la API; los errores
     quedan registrados y el healthcheck seguirá respondiendo.
+    Con `RUN_STARTUP_TASKS=0` (Docker: ya lo hizo `entrypoint.sh` una sola vez)
+    se omite, para que cada worker arranque de inmediato.
     """
+    if not settings.run_startup_tasks:
+        yield
+        return
     try:
         _run_migrations()
         logger.info("Migraciones aplicadas (alembic upgrade head).")
@@ -69,5 +74,8 @@ app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/health", tags=["meta"])
+@app.get(f"{settings.api_v1_prefix}/health", tags=["meta"], include_in_schema=False)
 def health() -> dict:
+    # También bajo /api para que el frontend (proxy /api/*) "despierte" la API
+    # desde la pantalla de login, antes de que el usuario envíe sus credenciales.
     return {"status": "ok", "project": settings.project_name}

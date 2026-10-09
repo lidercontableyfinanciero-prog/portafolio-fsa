@@ -69,11 +69,11 @@ respuesta del asistente. Plantillas versionadas: `backend/.env.production.exampl
 |---|---|---|
 | Render · API | `DATABASE_URL` | *(enlazada por el blueprint)* |
 | Render · API | `SECRET_KEY` | *(generada por Render)* |
-| Render · API | `ACCESS_TOKEN_EXPIRE_MINUTES` | `480` |
+| Render · API | `SESSION_IDLE_MINUTES` | `60` (cierre por inactividad) |
 | Render · API | `DEBUG` | `false` |
 | Render · API | `BACKEND_CORS_ORIGINS` | `["https://<tu-app>.vercel.app"]` |
 | Render · API | `RUN_SEED` | `0` |
-| Render · API | `WEB_CONCURRENCY` | `2` |
+| Render · API | `WEB_CONCURRENCY` | `1` |
 | Vercel · Web | `NEXT_PUBLIC_API_URL` | `https://<tu-api>.onrender.com` |
 
 `DATABASE_URL` de Render llega como `postgresql://…`; `app/core/config.py` la

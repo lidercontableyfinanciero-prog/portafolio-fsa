@@ -127,3 +127,20 @@ def test_admin_cannot_lock_out_last_admin(client, admin_token):
     r = client.patch(f"/api/users/{me['id']}", json={"is_active": False},
                      headers=auth(admin_token))
     assert r.status_code == 400
+
+
+def test_session_idle_token_and_refresh(client, lector_token):
+    """Sesión deslizante: el token dura SESSION_IDLE_MINUTES (60) y se renueva con actividad."""
+    from datetime import UTC, datetime
+
+    from app.core.security import create_access_token, decode_access_token
+
+    exp = datetime.fromtimestamp(decode_access_token(lector_token)["exp"], UTC)
+    minutes = (exp - datetime.now(UTC)).total_seconds() / 60
+    assert 55 < minutes <= 60
+    r = client.post("/api/auth/refresh", headers=auth(lector_token))
+    assert r.status_code == 200 and r.json()["access_token"]
+    assert client.post("/api/auth/refresh").status_code == 401
+    expired = create_access_token("LECTOR1_FSA", "lector", expires_minutes=-1)
+    assert client.post("/api/auth/refresh", headers=auth(expired)).status_code == 401
+    assert client.get("/api/health").json()["status"] == "ok"

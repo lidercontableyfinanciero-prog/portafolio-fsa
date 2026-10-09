@@ -44,7 +44,7 @@ Rutas: `/` pantalla principal (módulos + marquesina) · `/internacional/*` ·
 
 ```bash
 # backend
-cd backend && .venv/Scripts/python.exe -m pytest -q          # 73 pruebas (unit + API + ETL + export + nacional + seguridad)
+cd backend && .venv/Scripts/python.exe -m pytest -q          # 74 pruebas (unit + API + ETL + export + nacional + seguridad)
 cd backend && .venv/Scripts/python.exe scripts/smoke_pipeline.py   # E2E sin Postgres (SQLite)
 cd backend && .venv/Scripts/python.exe -m uvicorn app.main:app --reload
 
@@ -68,4 +68,10 @@ docker compose --profile full up --build
   `?replace=true` (que borra e reinserta). Todo queda en `ingestion_logs` / `GET /api/etl/history`.
 - Benchmarks: el seed carga 6,793 % / 8,2 % anual por defecto; editables vía
   `PUT /api/data/benchmarks` (solo admin) → recalcula Dietz/TWR.
+- **Sesión**: token de `SESSION_IDLE_MINUTES` (60) renovado por `POST /api/auth/refresh`
+  mientras hay actividad; el frontend (`lib/auth.tsx`) cierra la sesión tras 1 h inactivo.
+- **Producción (Render free)**: `entrypoint.sh` migra + `init_db` una sola vez y arranca
+  uvicorn con `RUN_STARTUP_TASKS=0`; `.github/workflows/keep-alive.yml` hace ping cada
+  10 min para evitar el arranque en frío. La BD free de Render **expira a los 30 días**:
+  los datos solo persisten con un plan de BD pagado (o una BD externa sin vencimiento).
 - Sin Python en el equipo original: se instaló 3.12 en `~/AppData/Local/Programs/Python/Python312`.

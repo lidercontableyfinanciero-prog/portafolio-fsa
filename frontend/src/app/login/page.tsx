@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { LoginShowcase } from "@/components/login/LoginShowcase";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/States";
-import { useAuth } from "@/lib/auth";
+import { LOGOUT_REASON_KEY, useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
   const { login, user, loading } = useAuth();
@@ -17,20 +17,42 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const [idleNotice, setIdleNotice] = useState(false);
 
   useEffect(() => {
     if (!loading && user) router.replace("/");
   }, [loading, user, router]);
 
+  useEffect(() => {
+    try {
+      // Se borra al enviar el formulario (no aquí: StrictMode repite el efecto).
+      setIdleNotice(sessionStorage.getItem(LOGOUT_REASON_KEY) === "inactividad");
+    } catch {
+      /* almacenamiento no disponible */
+    }
+    // "Despierta" la API mientras el usuario escribe sus credenciales.
+    fetch("/api/health", { cache: "no-store" }).catch(() => {});
+  }, []);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setIdleNotice(false);
+    try {
+      sessionStorage.removeItem(LOGOUT_REASON_KEY);
+    } catch {
+      /* almacenamiento no disponible */
+    }
     setBusy(true);
+    const slowTimer = window.setTimeout(() => setSlow(true), 4000);
     try {
       await login(username, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo iniciar sesión");
     } finally {
+      window.clearTimeout(slowTimer);
+      setSlow(false);
       setBusy(false);
     }
   }
@@ -92,11 +114,21 @@ export default function LoginPage() {
               />
             </label>
 
+            {idleNotice ? (
+              <p className="rounded-lg border border-fsa-amber/40 bg-fsa-amber/10 px-3 py-2 text-sm text-fsa-navy" role="status">
+                Tu sesión se cerró tras 1 hora de inactividad. Ingresa de nuevo para continuar.
+              </p>
+            ) : null}
             {error ? <ErrorState message={error} /> : null}
 
             <Button type="submit" disabled={busy} className="h-11 w-full">
               {busy ? "Ingresando…" : "Ingresar"}
             </Button>
+            {slow ? (
+              <p className="text-center text-xs text-fsa-muted" role="status">
+                Conectando con el servidor, un momento por favor…
+              </p>
+            ) : null}
           </form>
         </motion.div>
       </div>

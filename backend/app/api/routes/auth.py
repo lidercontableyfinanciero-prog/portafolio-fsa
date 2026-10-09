@@ -34,6 +34,13 @@ def login(
     return Token(access_token=token)
 
 
+@router.post("/refresh", response_model=Token)
+def refresh(user: User = Depends(get_current_user)) -> Token:
+    """Renueva la sesión deslizante mientras hay actividad. Tras
+    `session_idle_minutes` sin renovar, el token vence y hay que volver a ingresar."""
+    return Token(access_token=create_access_token(subject=user.username, role=user.role.value))
+
+
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)) -> User:
     return user

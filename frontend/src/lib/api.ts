@@ -2,11 +2,20 @@
 
 const BASE = "/api";
 const TOKEN_KEY = "fsa_token";
+const TOKEN_AT_KEY = "fsa_token_at";
 
 export const tokenStore = {
   get: () => (typeof window === "undefined" ? null : localStorage.getItem(TOKEN_KEY)),
-  set: (t: string) => localStorage.setItem(TOKEN_KEY, t),
-  clear: () => localStorage.removeItem(TOKEN_KEY),
+  set: (t: string) => {
+    localStorage.setItem(TOKEN_KEY, t);
+    localStorage.setItem(TOKEN_AT_KEY, String(Date.now()));
+  },
+  /** Momento (ms) en que se emitió/renovó el token actual. */
+  issuedAt: () => Number(localStorage.getItem(TOKEN_AT_KEY) ?? 0),
+  clear: () => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_AT_KEY);
+  },
 };
 
 export class ApiError extends Error {

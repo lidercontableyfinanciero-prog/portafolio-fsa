@@ -41,7 +41,14 @@ class Settings(BaseSettings):
     # --- Auth --- (>=32 bytes; sobreescribir en producción)
     secret_key: str = "dev-only-secret-change-me-please-0123456789abcdef"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 480
+    # Sesión deslizante: el token vence tras este tiempo sin actividad; el
+    # frontend lo renueva (POST /auth/refresh) mientras el usuario está activo.
+    session_idle_minutes: int = 60
+
+    # --- Arranque ---
+    # Migraciones + seed base en el `lifespan`. En Docker los ejecuta una sola
+    # vez `entrypoint.sh` (antes de levantar los workers) y lo desactiva aquí.
+    run_startup_tasks: bool = True
 
     # --- CORS ---
     backend_cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])

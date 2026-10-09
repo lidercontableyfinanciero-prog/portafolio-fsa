@@ -28,8 +28,8 @@ services:
                                           # config.py lo normaliza a postgresql+psycopg://
       - key: SECRET_KEY
         generateValue: true               # Render genera un valor aleatorio seguro
-      - key: ACCESS_TOKEN_EXPIRE_MINUTES
-        value: "480"
+      - key: SESSION_IDLE_MINUTES
+        value: "60"                       # cierre de sesión tras 1 h de inactividad
       - key: DEBUG
         value: "false"
       - key: BACKEND_CORS_ORIGINS
@@ -38,4 +38,4 @@ services:
       - key: RUN_SEED
         value: "0"
       - key: WEB_CONCURRENCY
-        value: "2"
+        value: "1"                        # plan free (0,1 CPU / 512 MB): 1 worker arranca más rápido
